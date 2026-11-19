@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primos-orange: #f95;
+  --color-primos-green: #226425;
+  --color-primos-yellow: #bea719;
+}
+
+@layer base {
+  body {
+    background-color: black;
+    color: white;
+  }
+}
+
+.bg-gradiente-entregado {
+  background: linear-gradient(to right, rgba(34, 100, 37, 0.4), #000);
+}
+
+.bg-gradiente-pagado {
+  background: linear-gradient(to right, rgba(190, 167, 25, 0.4), #000);
+}
+
+/* Estilo para la barra de scroll personalizada */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #f97316;
+  /* Color naranja Primos */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #fb923c;
+}
+
+/* Evitar que el scroll horizontal aparezca por error */
+body {
+  overflow: hidden;
+  background-color: black;
+}
+
+.input-dark {
+  @apply bg-gray-900 border border-gray-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-orange-500 transition-all;
+}
