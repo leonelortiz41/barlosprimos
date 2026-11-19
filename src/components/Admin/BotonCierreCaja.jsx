@@ -234,7 +234,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
 
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text(`Pedidos retirados por mostrador: ${viajesMostrador}`, 12, doc.lastAutoTable.finalY + 7);
+      doc.text(`Pedidos retirados por mostrador: ${viajesMostrador}`, 14, doc.lastAutoTable.finalY + 7);
 
       // --- 3. VENTAS POR CATEGORÍA ---
       const stats = {};
