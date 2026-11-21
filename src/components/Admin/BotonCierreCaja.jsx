@@ -211,7 +211,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
       yActual = doc.lastAutoTable.finalY + 13;
       doc.setFontSize(11.5);
       doc.setFont(undefined, 'bold');
-      doc.text('2. LOGÍSTICA DE REPARTIDORES', 14, yActual);
+      doc.text('2. REPARTIDORES', 14, yActual);
 
       autoTable(doc, {
         startY: yActual + 3,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import FilaPedido from '../components/Admin/FilaPedido';
 import CardRepartidor from '../components/Admin/CardRepartidor';
@@ -6,69 +6,88 @@ import ResumenCaja from '../components/Admin/ResumenCaja';
 import HeaderAdmin from '../components/Admin/HeaderAdmin';
 import { LayoutDashboard, Users } from 'lucide-react';
 
+const extraerArray = (respuesta, clavesPosibles = ['data', 'pedidos', 'repartidores', 'rows']) => {
+  const base = respuesta?.data ?? respuesta;
+  if (Array.isArray(base)) return base;
+  if (base && typeof base === 'object') {
+    for (const clave of clavesPosibles) {
+      if (Array.isArray(base[clave])) return base[clave];
+    }
+  }
+  return [];
+};
+
 const Cuaderno = () => {
   const [pedidos, setPedidos] = useState([]);
-  const [repartidores, setRepartidores] = useState([]); // Estado para repartidores de DB
-  const [configs, setConfigs] = useState([]);           // Estado para comisión de DB
+  const [repartidores, setRepartidores] = useState([]);
+  const [configs, setConfigs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('');
 
   // --- CARGA INTEGRAL DE DATOS ---
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) {
+      setLoading(true);
+    }
     try {
-      // Lanzamos todas las peticiones en paralelo para mayor velocidad
       const [resPedidos, resRepartidores, resConfigs] = await Promise.all([
         api.getPedidos(),
         api.getRepartidores(),
         api.getConfig()
       ]);
 
-      // Procesar Pedidos
-      let listaPedidos = resPedidos.data || resPedidos || [];
-      const ordenados = [...listaPedidos].sort((a, b) => (parseInt(b.id) || 0) - (parseInt(a.id) || 0));
+      const listaPedidos = extraerArray(resPedidos, ['pedidos', 'data', 'rows']);
+      const ordenados = [...listaPedidos].sort(
+        (a, b) => (parseInt(b?.id, 10) || 0) - (parseInt(a?.id, 10) || 0)
+      );
       setPedidos(ordenados);
 
-      // Procesar Repartidores
-      setRepartidores(resRepartidores.data || resRepartidores || []);
-
-      // Procesar Configs (Comisión)
-      setConfigs(resConfigs.data || resConfigs || []);
-
+      setRepartidores(extraerArray(resRepartidores, ['repartidores', 'data', 'rows']));
+      setConfigs(extraerArray(resConfigs, ['configuracion', 'configs', 'data', 'rows']));
     } catch (err) {
-      console.error("Error al sincronizar datos:", err);
+      console.error('Error al sincronizar datos:', err);
     } finally {
-      setLoading(false);
+      if (!silencioso) {
+        setLoading(false);
+      }
     }
-  };
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000); // Auto-refresh cada 30s
-    return () => clearInterval(interval);
   }, []);
 
-  const pedidosFiltrados = pedidos.filter(p =>
-    p.cliente?.toLowerCase().includes(filtro.toLowerCase()) || p.id?.toString().includes(filtro)
-  );
+  useEffect(() => {
+    fetchData({ silencioso: false });
+    const interval = setInterval(() => {
+      fetchData({ silencioso: true });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const filtroNormalizado = filtro.trim().toLowerCase();
+  const pedidosFiltrados = pedidos.filter((p) => {
+    if (!filtroNormalizado) return true;
+    const clienteMatch = String(p?.cliente ?? '').toLowerCase().includes(filtroNormalizado);
+    const idMatch = String(p?.id ?? '').toLowerCase().includes(filtroNormalizado);
+    return clienteMatch || idMatch;
+  });
 
   const handleBorrarTodo = async () => {
+    const confirmado = window.confirm(
+      '¿Seguro que querés borrar todos los pedidos y reiniciar la caja?'
+    );
+    if (!confirmado) return;
+
     try {
-      // Llamamos a la API para borrar físicamente los pedidos de la base de datos
       await api.deleteAllPedidos();
-      // Actualizamos el estado local para que la pantalla quede vacía
       setPedidos([]);
-      alert("Caja reiniciada. Los pedidos han sido archivados/borrados.");
+      alert('Caja reiniciada. Los pedidos han sido archivados/borrados.');
     } catch (err) {
-      console.error("Error al reiniciar el día:", err);
-      alert("Hubo un error al intentar borrar los pedidos.");
+      console.error('Error al reiniciar el día:', err);
+      alert('Hubo un error al intentar borrar los pedidos.');
     }
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-72px)] bg-[#050505] text-white p-2 gap-2 overflow-hidden font-sans">
       <div className="flex flex-1 gap-2 min-h-0 overflow-hidden">
-
         {/* COLUMNA IZQUIERDA: TABLA + RESUMEN */}
         <div className="flex-[3] flex flex-col min-h-0 gap-2 h-full">
           <main className="flex-1 min-h-0 bg-[#0a0a0a] border border-gray-800 rounded-2xl overflow-hidden flex flex-col shadow-inner">
@@ -89,8 +108,8 @@ const Cuaderno = () => {
                     <FilaPedido
                       key={p.id}
                       pedido={p}
-                      refreshData={fetchData}
-                      repartidores={repartidores} // <-- AGREGA ESTA LÍNEA
+                      refreshData={() => fetchData({ silencioso: true })}
+                      repartidores={repartidores}
                     />
                   ))}
                 </tbody>
@@ -113,36 +132,46 @@ const Cuaderno = () => {
               <div className="bg-orange-500 p-1 rounded-lg">
                 <LayoutDashboard size={14} className="text-black" />
               </div>
-              <h1 className="text-[11px] font-black uppercase tracking-tighter">Panel de Control</h1>
+              <h1 className="text-[11px] font-black uppercase tracking-tighter">
+                Panel de Control
+              </h1>
             </div>
-            <HeaderAdmin filtro={filtro} setFiltro={setFiltro} fetchPedidos={fetchData} loading={loading} />
+            <HeaderAdmin
+              filtro={filtro}
+              setFiltro={setFiltro}
+              fetchPedidos={() => fetchData({ silencioso: false })}
+              loading={loading}
+            />
           </div>
 
           {/* ÁREA DE REPARTIDORES MAPEADOS */}
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-2">
             <div className="flex items-center gap-2 px-2 py-1 opacity-50">
               <Users size={10} className="text-gray-400" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Personal en Servicio</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                Personal en Servicio
+              </span>
             </div>
 
             {repartidores.length > 0 ? (
-              repartidores.map(rep => (
+              repartidores.map((rep) => (
                 <CardRepartidor
-                  key={rep.id}
+                  key={rep.id ?? rep.nombre}
                   nombre={rep.nombre}
                   pedidos={pedidos}
-                  configs={configs} // Pasamos las configuraciones para la comisión
-                  refreshData={fetchData}
+                  configs={configs}
+                  refreshData={() => fetchData({ silencioso: true })}
                 />
               ))
             ) : (
               <div className="p-4 text-center border border-dashed border-gray-800 rounded-2xl">
-                <span className="text-[12px] font-bold text-gray-600 uppercase">Sin repartidores activos</span>
+                <span className="text-[12px] font-bold text-gray-600 uppercase">
+                  Sin repartidores activos
+                </span>
               </div>
             )}
           </div>
         </aside>
-
       </div>
     </div>
   );
