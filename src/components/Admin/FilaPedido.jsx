@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { imprimirComanda } from '../../services/PrintService';
+import { registrarPedidoBorrado } from '../../services/historialBorrados';
 import {
     CheckCircle2,
     Receipt,
@@ -114,12 +115,39 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
         imprimirComanda(dataParaTicket, tipo);
     };
 
+    const manejarBorrarPedido = async () => {
+        const motivo = window.prompt(
+            `¿Borrar pedido #${pedido.id} de ${pedido.cliente}?\nIndicá el motivo (opcional):`
+        );
+        if (motivo === null) return;
+
+        try {
+            registrarPedidoBorrado(pedido, textoDetalle, motivo);
+            await api.deletePedido(pedido.id);
+            if (refreshData) {
+                refreshData();
+            }
+        } catch (err) {
+            console.error("Error al borrar pedido:", err);
+            alert("No se pudo borrar el pedido.");
+        }
+    };
+
     const esEntregado = Boolean(pedido?.statu && String(pedido.statu).startsWith("ENTREGADO_"));
     const esPagado = Boolean(pedido?.pagado && pedido.pagado !== "0" && pedido.pagado !== 0);
     const estaDesocupado = esEntregado;
     const valorSelectViaje = esEntregado
         ? String(pedido.statu).replace("ENTREGADO_", "")
         : (pedido?.statu || "0");
+
+    const etiquetaMedioPago =
+        pedido?.pagado === 'TRANSF'
+            ? 'transf'
+            : pedido?.pagado === 'EFECTIVO' || pedido?.pagado === 1 || pedido?.pagado === '1'
+            ? 'efec'
+            : esPagado
+            ? String(pedido.pagado).toLowerCase()
+            : '';
 
     return (
         <tr
@@ -135,6 +163,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
 
             <td className="p-3 min-w-[250px]">
                 <div className="text-[12px] font-black text-white uppercase leading-tight break-words">
+                    <span className="text-orange-400 mr-1.5">[#{pedido.id}]</span>
                     {textoDetalle}
                 </div>
             </td>
@@ -231,7 +260,19 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                         PJ
                     </button>
 
-                    <div className="relative">
+                    <div className="relative inline-flex items-center justify-center">
+                        {esPagado && etiquetaMedioPago && (
+                            <span
+                                className={`absolute -top-3.5 left-1/2 -translate-x-1/2 text-[8px] font-black lowercase leading-none px-1 py-[1px] rounded tracking-tight pointer-events-none whitespace-nowrap z-10 ${
+                                    pedido?.pagado === 'TRANSF'
+                                        ? 'text-blue-300 bg-blue-950/90 border border-blue-500/40'
+                                        : 'text-emerald-300 bg-emerald-950/90 border border-emerald-500/40'
+                                }`}
+                            >
+                                {etiquetaMedioPago}
+                            </span>
+                        )}
+
                         <button
                             type="button"
                             onClick={() =>
@@ -299,20 +340,8 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
 
                     <button
                         type="button"
-                        onClick={async () => {
-                            if (window.confirm(`¿Borrar pedido #${pedido.id}?`)) {
-                                try {
-                                    await api.deletePedido(pedido.id);
-                                    if (refreshData) {
-                                        refreshData();
-                                    }
-                                } catch (err) {
-                                    console.error("Error al borrar pedido:", err);
-                                    alert("No se pudo borrar el pedido.");
-                                }
-                            }
-                        }}
-                        title="Borrar pedido"
+                        onClick={manejarBorrarPedido}
+                        title="Borrar pedido (queda registrado)"
                         className="p-2 bg-red-950/20 border border-red-900/30 rounded-lg text-red-700 hover:bg-red-600 hover:text-white transition-all"
                     >
                         <Trash2 size={14} />

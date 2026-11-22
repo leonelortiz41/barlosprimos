@@ -5,6 +5,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { api } from '../../services/api.js';
+import { obtenerPedidosBorrados } from '../../services/historialBorrados.js';
 
 const formatoPesos = (valor) => `$${(parseFloat(valor) || 0).toLocaleString('es-AR')}`;
 
@@ -15,19 +16,47 @@ const obtenerMedioPago = (p) => {
   return String(p.pagado).toUpperCase();
 };
 
+const ordenarPedidosAscendente = (lista = []) => {
+  return [...lista].sort((a, b) => {
+    const idA = parseInt(a?.id, 10);
+    const idB = parseInt(b?.id, 10);
+    if (!Number.isNaN(idA) && !Number.isNaN(idB) && idA !== idB) {
+      return idA - idB;
+    }
+    return 0;
+  });
+};
+
+const ordenarBorradosAscendente = (lista = []) => {
+  return [...lista].sort((a, b) => {
+    const idA = parseInt(a?.id, 10);
+    const idB = parseInt(b?.id, 10);
+    if (!Number.isNaN(idA) && !Number.isNaN(idB) && idA !== idB) {
+      return idA - idB;
+    }
+    const tsA = parseInt(String(a?.uid || '').split('-').pop(), 10) || 0;
+    const tsB = parseInt(String(b?.uid || '').split('-').pop(), 10) || 0;
+    return tsA - tsB;
+  });
+};
+
 const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [fechaManual, setFechaManual] = useState(new Date().toISOString().split('T')[0]);
   const [valorComisionBase, setValorComisionBase] = useState(0);
   const [enviandoPDF, setEnviandoPDF] = useState(false);
+  const [pedidosBorrados, setPedidosBorrados] = useState([]);
 
-  // 1. CARGAR COMISIÓN DE REPARTIDORES DESDE DB
+  // 1. CARGAR COMISIÓN DE REPARTIDORES DESDE DB Y BORRADOS LOCALES
   useEffect(() => {
     if (modalAbierto) {
+      setPedidosBorrados(obtenerPedidosBorrados());
+
       const cargarConfig = async () => {
         try {
           const res = await api.getConfig();
-          const config = res.data?.find((c) => c.tipo === 'comision');
+          const listaConfigs = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+          const config = listaConfigs.find((c) => c.tipo === 'comision');
           if (config) setValorComisionBase(parseFloat(config.valor) || 0);
         } catch (err) {
           console.error('Error cargando comisión repartidores:', err);
@@ -52,22 +81,55 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
   const totalCaja = montoEfectivo + montoTransf;
   const totalImportesPedidos = pedidos.reduce((acc, p) => acc + (parseFloat(p.importe) || 0), 0);
   const pendienteCobro = Math.max(0, totalImportesPedidos - totalCaja);
+  const totalAnuladoBorrados = pedidosBorrados.reduce(
+    (acc, b) => acc + (parseFloat(b.importe) || 0),
+    0
+  );
 
   const parsearDetalle = (detalleRaw) => {
+    if (!detalleRaw) return [];
+    if (Array.isArray(detalleRaw)) return detalleRaw;
+    if (typeof detalleRaw !== 'string') return [];
+
+    const limpio = detalleRaw.trim();
+    if (!limpio) return [];
+
     try {
-      const data = typeof detalleRaw === 'string' ? JSON.parse(`[${detalleRaw}]`) : detalleRaw;
+      const normalizado = limpio.includes('}{')
+        ? `[${limpio.replace(/\}\s*\{/g, '},{')}]`
+        : limpio.startsWith('[')
+        ? limpio
+        : `[${limpio}]`;
+      const data = JSON.parse(normalizado);
       return Array.isArray(data) ? data : [];
     } catch {
       return [];
     }
   };
 
-  // 3. GENERACIÓN DE PDF (DETALLE DE PEDIDOS PRIMERO, APTO B/N Y BUENA LECTURA)
+  const obtenerTextoDetallePedido = (p) => {
+    const items = parsearDetalle(p.pedido ?? p.detalle);
+    if (items.length > 0) {
+      return items
+        .map((i) => `${i.cantidad || 1}x ${i.hidden_nombre || i.nombre || 'Ítem'}`)
+        .join(', ');
+    }
+    return typeof p.detalle === 'string' && p.detalle.trim() !== '' ? p.detalle : '-';
+  };
+
+  // 3. GENERACIÓN DE PDF (DETALLE DE PEDIDOS PRIMERO EN ORDEN ASCENDENTE)
   const descargarPDFReporte = async () => {
     if (enviandoPDF) return;
     setEnviandoPDF(true);
 
     try {
+      const pedidosAscendentes = ordenarPedidosAscendente(pedidos);
+      const borradosAscendentes = ordenarBorradosAscendente(obtenerPedidosBorrados());
+      const totalAnuladoActual = borradosAscendentes.reduce(
+        (acc, b) => acc + (parseFloat(b.importe) || 0),
+        0
+      );
+
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
@@ -86,7 +148,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
       doc.setTextColor(240, 240, 240);
       doc.text(`Fecha: ${fechaManual}`, 14, 26);
       doc.text(`Comisión viaje: ${formatoPesos(valorComisionBase)}`, 74, 26);
-      doc.text(`Pedidos: ${pedidos.length}`, 154, 26);
+      doc.text(`Pedidos: ${pedidosAscendentes.length}`, 154, 26);
 
       doc.setTextColor(0, 0, 0);
 
@@ -105,13 +167,13 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
         bodyStyles: { fontSize: 10.5, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center' }
       });
 
-      // --- 1. DETALLE DE PEDIDOS (PRIMERO) ---
+      // --- 1. DETALLE DE PEDIDOS (ORDEN ASCENDENTE) ---
       let yActual = doc.lastAutoTable.finalY + 12;
       doc.setFontSize(11.5);
       doc.setFont(undefined, 'bold');
       doc.text('1. DETALLE DE PEDIDOS', 14, yActual);
 
-      const filasPedidos = pedidos.map((p) => {
+      const filasPedidos = pedidosAscendentes.map((p) => {
         let entrega = 'S/D';
         if (p.statu === 'ENTREGADO_0') {
           entrega = 'MOSTRADOR';
@@ -119,14 +181,11 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
           entrega = p.statu.replace('ENTREGADO_', '');
         }
 
-        const detalleTexto = parsearDetalle(p.detalle)
-          .map((i) => `${i.cantidad || 1}x ${i.hidden_nombre || i.nombre || 'Ítem'}`)
-          .join(', ');
-
+        const detalleTexto = obtenerTextoDetallePedido(p);
         const medioPago = obtenerMedioPago(p);
 
         return [
-          p.cliente || 'S/N',
+          `#${p.id ?? 'S/N'} / ${p.cliente || 'S/N'}`,
           detalleTexto || '-',
           entrega,
           medioPago,
@@ -137,7 +196,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
       if (filasPedidos.length > 0) {
         filasPedidos.push([
           'TOTAL',
-          `${pedidos.length} pedidos (${pedidosTransf.length} TRANSF)`,
+          `${pedidosAscendentes.length} pedidos (${pedidosTransf.length} TRANSF)`,
           '',
           '',
           formatoPesos(totalImportesPedidos)
@@ -146,14 +205,14 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
 
       autoTable(doc, {
         startY: yActual + 3,
-        head: [['CLIENTE', 'DETALLE', 'ENTREGA', 'PAGO', 'IMPORTE']],
+        head: [['PEDIDO / CLIENTE', 'DETALLE', 'ENTREGA', 'PAGO', 'IMPORTE']],
         body: filasPedidos.length > 0 ? filasPedidos : [['-', 'Sin pedidos en esta jornada', '-', '-', formatoPesos(0)]],
         theme: 'grid',
         headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 9 },
         styles: { fontSize: 9.5, textColor: [0, 0, 0], overflow: 'linebreak', cellPadding: 2.5 },
         columnStyles: {
-          0: { cellWidth: 28 },
-          1: { cellWidth: 74 },
+          0: { cellWidth: 34 },
+          1: { cellWidth: 68 },
           2: { cellWidth: 26 },
           3: { cellWidth: 25, halign: 'center' },
           4: { cellWidth: 29, halign: 'right' }
@@ -186,7 +245,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
       let totalViajesReparto = 0;
       let totalPagarRepartidores = 0;
 
-      pedidos.forEach((p) => {
+      pedidosAscendentes.forEach((p) => {
         if (p.statu === 'ENTREGADO_0') {
           viajesMostrador++;
         } else if (p.statu?.startsWith('ENTREGADO_')) {
@@ -236,12 +295,12 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
       doc.setFont(undefined, 'bold');
       doc.text(`Pedidos retirados por mostrador: ${viajesMostrador}`, 14, doc.lastAutoTable.finalY + 7);
 
-      // --- 3. VENTAS POR CATEGORÍA ---
+      // --- 3. VENTAS POR CATEGORÍA (MAYOR A MENOR) ---
       const stats = {};
       let totalUnidades = 0;
 
-      pedidos.forEach((p) => {
-        parsearDetalle(p.detalle).forEach((item) => {
+      pedidosAscendentes.forEach((p) => {
+        parsearDetalle(p.pedido ?? p.detalle).forEach((item) => {
           const cat = (item.hidden_clase || item.clase || 'OTROS').toUpperCase();
           const cant = parseInt(item.cantidad, 10) || 1;
           stats[cat] = (stats[cat] || 0) + cant;
@@ -249,7 +308,12 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
         });
       });
 
-      const filasCategorias = Object.entries(stats).map(([k, v]) => [k, v]);
+      const categoriasOrdenadas = Object.entries(stats).sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0]);
+      });
+
+      const filasCategorias = categoriasOrdenadas.map(([k, v]) => [k, v]);
       if (filasCategorias.length > 0) {
         filasCategorias.push(['TOTAL UNIDADES', totalUnidades]);
       }
@@ -271,6 +335,54 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
         },
         didParseCell: (data) => {
           if (filasCategorias.length > 0 && data.row.index === filasCategorias.length - 1) {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [235, 235, 235];
+          }
+        }
+      });
+
+      // --- 4. PEDIDOS BORRADOS (ORDEN ASCENDENTE) ---
+      yActual = doc.lastAutoTable.finalY + 14;
+      doc.setFontSize(11.5);
+      doc.setFont(undefined, 'bold');
+      doc.text('4. PEDIDOS BORRADOS', 14, yActual);
+
+      const filasBorrados = borradosAscendentes.map((b) => [
+        `#${b.id ?? 'S/N'}`,
+        b.cliente || 'S/N',
+        b.detalle || '-',
+        b.motivo || 'Sin motivo',
+        formatoPesos(b.importe)
+      ]);
+
+      if (filasBorrados.length > 0) {
+        filasBorrados.push([
+          'TOTAL ANULADO',
+          `${borradosAscendentes.length} borrados`,
+          '',
+          '',
+          formatoPesos(totalAnuladoActual)
+        ]);
+      }
+
+      autoTable(doc, {
+        startY: yActual + 3,
+        head: [['PEDIDO', 'CLIENTE', 'DETALLE', 'MOTIVO', 'IMPORTE']],
+        body: filasBorrados.length > 0
+          ? filasBorrados
+          : [['-', '-', 'Sin pedidos borrados registrados', '-', formatoPesos(0)]],
+        theme: 'grid',
+        headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 9 },
+        styles: { fontSize: 9, textColor: [0, 0, 0], overflow: 'linebreak', cellPadding: 2.5 },
+        columnStyles: {
+          0: { cellWidth: 24 },
+          1: { cellWidth: 33 },
+          2: { cellWidth: 56 },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 29, halign: 'right' }
+        },
+        didParseCell: (data) => {
+          if (filasBorrados.length > 0 && data.row.index === filasBorrados.length - 1) {
             data.cell.styles.fontStyle = 'bold';
             data.cell.styles.fillColor = [235, 235, 235];
           }
@@ -326,6 +438,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
           <hr>
           <p style="text-align:left;">EFECTIVO: ${formatoPesos(montoEfectivo)}</p>
           <p style="text-align:left;">TRANSF (${pedidosTransf.length}): ${formatoPesos(montoTransf)}</p>
+          <p style="text-align:left;">BORRADOS (${pedidosBorrados.length}): ${formatoPesos(totalAnuladoBorrados)}</p>
           <div style="border:3px solid #000; font-size:20px; margin:10px 0; padding:5px;">
             TOTAL CAJA: ${formatoPesos(totalCaja)}
           </div>
@@ -339,6 +452,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
   return (
     <>
       <button
+        type="button"
         onClick={() => setModalAbierto(true)}
         className="bg-orange-600 text-white px-5 py-2.5 rounded-2xl font-black text-[10px] hover:bg-orange-500 transition-all shadow-lg flex items-center gap-2 uppercase tracking-widest active:scale-95 shrink-0"
       >
@@ -351,7 +465,11 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
 
             <div className="p-6 pb-2 flex justify-between items-center">
               <h3 className="text-white uppercase text-[9px] tracking-[0.2em] opacity-50">resumen de jornada</h3>
-              <button onClick={() => setModalAbierto(false)} className="text-gray-500 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setModalAbierto(false)}
+                className="text-gray-500 hover:text-white"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -375,10 +493,15 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
                   <span className="text-[9px] text-gray-500 uppercase">Transferencias ({pedidosTransf.length}):</span>
                   <span className="text-[9px] text-blue-400 uppercase">{formatoPesos(montoTransf)}</span>
                 </div>
+                <div className="flex justify-between px-2">
+                  <span className="text-[9px] text-gray-500 uppercase">Pedidos Borrados ({pedidosBorrados.length}):</span>
+                  <span className="text-[9px] text-red-400 uppercase">{formatoPesos(totalAnuladoBorrados)}</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <button
+                  type="button"
                   onClick={imprimirTicketRapido}
                   disabled={enviandoPDF}
                   className="bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex flex-col items-center gap-2 hover:bg-orange-500 transition-all disabled:opacity-50"
@@ -386,6 +509,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
                   <Printer size={18} /> Ticket Rápido
                 </button>
                 <button
+                  type="button"
                   onClick={descargarPDFReporte}
                   disabled={enviandoPDF}
                   className="bg-blue-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase flex flex-col items-center gap-2 hover:bg-blue-500 transition-all disabled:opacity-50"
@@ -395,6 +519,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
               </div>
 
               <button
+                type="button"
                 onClick={() => {
                   if (window.confirm('⚠️ ¿BORRAR TODO EL CUADERNO?\n\nSe eliminarán todos los pedidos para empezar un nuevo día.')) {
                     onBorrarTodo();

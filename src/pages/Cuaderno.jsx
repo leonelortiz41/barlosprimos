@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { limpiarPedidosBorrados } from '../services/historialBorrados';
 import FilaPedido from '../components/Admin/FilaPedido';
 import CardRepartidor from '../components/Admin/CardRepartidor';
 import ResumenCaja from '../components/Admin/ResumenCaja';
@@ -23,6 +24,7 @@ const Cuaderno = () => {
   const [configs, setConfigs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('');
+  const [tickBorrados, setTickBorrados] = useState(0);
 
   // --- CARGA INTEGRAL DE DATOS ---
   const fetchData = useCallback(async ({ silencioso = false } = {}) => {
@@ -61,6 +63,11 @@ const Cuaderno = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  const handleRefreshFila = useCallback(() => {
+    setTickBorrados((prev) => prev + 1);
+    fetchData({ silencioso: true });
+  }, [fetchData]);
+
   const filtroNormalizado = filtro.trim().toLowerCase();
   const pedidosFiltrados = pedidos.filter((p) => {
     if (!filtroNormalizado) return true;
@@ -77,8 +84,10 @@ const Cuaderno = () => {
 
     try {
       await api.deleteAllPedidos();
+      limpiarPedidosBorrados();
       setPedidos([]);
-      alert('Caja reiniciada. Los pedidos han sido archivados/borrados.');
+      setTickBorrados((prev) => prev + 1);
+      alert('Caja reiniciada. Los pedidos y el registro de borrados del día han sido limpiados.');
     } catch (err) {
       console.error('Error al reiniciar el día:', err);
       alert('Hubo un error al intentar borrar los pedidos.');
@@ -108,7 +117,7 @@ const Cuaderno = () => {
                     <FilaPedido
                       key={p.id}
                       pedido={p}
-                      refreshData={() => fetchData({ silencioso: true })}
+                      refreshData={handleRefreshFila}
                       repartidores={repartidores}
                     />
                   ))}
@@ -121,6 +130,7 @@ const Cuaderno = () => {
             <ResumenCaja
               pedidos={pedidos}
               onBorrarTodo={handleBorrarTodo}
+              tickBorrados={tickBorrados}
             />
           </section>
         </div>

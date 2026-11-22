@@ -43,10 +43,26 @@ const esPedidoPagado = (pagado) => {
 };
 
 const abrirYImprimirHtml = (html) => {
-  const ventanaImpresion = window.open('', '_blank');
+  const ancho = window.screen?.availWidth || 1280;
+  const alto = window.screen?.availHeight || 800;
+
+  const ventanaImpresion = window.open(
+    '',
+    '_blank',
+    `width=${ancho},height=${alto},top=0,left=0,scrollbars=yes,resizable=yes`
+  );
+
   if (!ventanaImpresion) {
     alert('Permití las ventanas emergentes en el navegador para imprimir la comanda.');
     return;
+  }
+
+  try {
+    ventanaImpresion.moveTo(0, 0);
+    ventanaImpresion.resizeTo(ancho, alto);
+    ventanaImpresion.focus();
+  } catch (e) {
+    // Ignorado si el navegador restringe moveTo/resizeTo
   }
 
   ventanaImpresion.document.open();
