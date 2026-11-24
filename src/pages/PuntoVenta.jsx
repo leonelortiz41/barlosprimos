@@ -57,6 +57,14 @@ const extraerListaPedidos = (resPedidos) => {
     return [];
 };
 
+const limpiarNombreEdicion = (rawCliente = '') => {
+    return String(rawCliente)
+        .replace(/^\[WEB\]\s*/i, '')
+        .split(/[·|]/)[0]
+        .trim()
+        .toUpperCase();
+};
+
 const PuntoVenta = () => {
     const { descontarStock } = useContext(StockContext);
     const inputBusquedaRef = useRef(null);
@@ -69,6 +77,7 @@ const PuntoVenta = () => {
     const [filtro, setFiltro] = useState("");
     const [idEdicion, setIdEdicion] = useState(null);
     const [procesando, setProcesando] = useState(false);
+    const [avisoEstado, setAvisoEstado] = useState("");
 
     const [config, setConfig] = useState({
         nombre: "",
@@ -87,11 +96,12 @@ const PuntoVenta = () => {
     useEffect(() => {
         const cargarTodo = async () => {
             try {
-                const [mila, hamb, lom, pizz, pap, beb, pla, resConfigs] = await Promise.all([
+                const [mila, hamb, lom, pizz, emp, pap, beb, pla, resConfigs] = await Promise.all([
                     api.getMilanesas(),
                     api.getHamburguesas(),
                     api.getLomitos(),
                     api.getPizzas(),
+                    api.getEmpanadas(),
                     api.getPapas(),
                     api.getBebidas(),
                     api.getPlatos(),
@@ -103,6 +113,7 @@ const PuntoVenta = () => {
                     hamburguesas: hamb.data || [],
                     lomitos: lom.data || [],
                     pizzas: pizz.data || [],
+                    empanadas: emp.data || [],
                     papas: pap.data || [],
                     bebidas: beb.data || [],
                     platos: pla.data || []
@@ -130,7 +141,7 @@ const PuntoVenta = () => {
                         });
 
                         setIdEdicion(data.idPedido);
-                        setCliente(data.cliente || "");
+                        setCliente(limpiarNombreEdicion(data.cliente || ""));
                         setCarrito(carritoNormalizado);
                     }
                 }
@@ -147,11 +158,13 @@ const PuntoVenta = () => {
         setCarrito([]);
         setCliente("");
         setFiltro("");
+        setAvisoEstado("");
     };
 
     const seleccionarProducto = (p, clase) => {
         const reglas = REGLAS_MENU[clase] || { adicionales: false, ingredientes: false };
         const precioUnitario = Math.floor(Number(p.precio) || 0);
+        setAvisoEstado("");
 
         if (!reglas.adicionales && !reglas.ingredientes) {
             setCarrito((prev) => [
@@ -243,10 +256,12 @@ const PuntoVenta = () => {
     const finalizarVenta = async () => {
         const clienteLimpio = cliente.trim().toUpperCase();
         if (carrito.length === 0 || !clienteLimpio || procesando) {
-            return alert("FALTAN DATOS");
+            setAvisoEstado("Completá el cliente y agregá al menos un producto.");
+            return;
         }
 
         setProcesando(true);
+        setAvisoEstado("");
         try {
             const importeTotal = carrito.reduce(
                 (acc, i) => acc + Math.round(Number(i.hidden_precio) || 0),
@@ -256,13 +271,15 @@ const PuntoVenta = () => {
                 (acc, i) => acc + (i.cantidad || 1),
                 0
             );
+            const resumenTexto = carrito
+                .map((i) => `${i.cantidad || 1}x ${i.hidden_nombre}`)
+                .join(', ');
 
             const pedidoFinal = {
                 cliente: clienteLimpio,
                 pedido: carrito,
-                detalle: carrito
-                    .map((i) => `${i.cantidad || 1}x ${i.hidden_nombre}`)
-                    .join(', '),
+                detalle: resumenTexto,
+                detalleTicket: resumenTexto,
                 importe: importeTotal,
                 cantidad: cantidadTotal,
                 statu: "0",
@@ -322,7 +339,7 @@ const PuntoVenta = () => {
             setTimeout(() => inputBusquedaRef.current?.focus(), 50);
         } catch (err) {
             console.error("Error en finalizarVenta:", err);
-            alert("ERROR AL PROCESAR OPERACIÓN");
+            setAvisoEstado("Error al procesar la operación.");
         } finally {
             setProcesando(false);
         }
@@ -330,6 +347,12 @@ const PuntoVenta = () => {
 
     return (
         <div className="flex flex-col h-[calc(100vh-80px)] p-4 bg-black overflow-hidden font-sans">
+            {avisoEstado && (
+                <div className="bg-amber-500/15 border border-amber-500/40 text-amber-200 px-4 py-2 mb-2 rounded-xl text-xs font-bold">
+                    {avisoEstado}
+                </div>
+            )}
+
             {idEdicion && (
                 <div className="flex items-center justify-between bg-blue-600/20 border border-blue-500/30 px-4 py-2 mb-3 rounded-xl">
                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">

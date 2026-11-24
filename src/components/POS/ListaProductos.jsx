@@ -1,136 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Utensils, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Utensils, ChevronRight, X } from 'lucide-react';
 
-const ListaProductos = ({ productos, filtro, setFiltro, onSeleccionar }) => {
-  const [categoriaActiva, setCategoriaActiva] = useState("");
+const ListaProductos = ({ productos, filtro, setFiltro, onSeleccionar, inputRef }) => {
+  const [categoriaActiva, setCategoriaActiva] = useState('');
 
-  // Obtener nombres de categorías y establecer la primera como activa por defecto
-  const categorias = Object.keys(productos ?? {});
-  
+  const categorias = useMemo(() => Object.keys(productos ?? {}), [productos]);
+
   useEffect(() => {
-    if (categorias.length > 0 && !categoriaActiva) {
+    if (categorias.length === 0) {
+      if (categoriaActiva) setCategoriaActiva('');
+      return;
+    }
+    if (!categoriaActiva || !categorias.includes(categoriaActiva)) {
       setCategoriaActiva(categorias[0]);
     }
-  }, [productos, categorias, categoriaActiva]);
+  }, [categorias, categoriaActiva]);
+
+  const filtroNormalizado = (filtro || '').trim().toUpperCase();
+
+  const seccionesFiltradas = useMemo(() => {
+    return Object.entries(productos ?? {})
+      .filter(([categoria]) => (filtroNormalizado ? true : categoria === categoriaActiva))
+      .map(([categoria, lista]) => {
+        const items = (lista ?? []).filter((p) =>
+          String(p?.nombre ?? '').toUpperCase().includes(filtroNormalizado)
+        );
+        return { categoria, items };
+      })
+      .filter((sec) => sec.items.length > 0);
+  }, [productos, filtroNormalizado, categoriaActiva]);
+
+  const totalResultadosBusqueda = useMemo(
+    () => seccionesFiltradas.reduce((acc, sec) => acc + sec.items.length, 0),
+    [seccionesFiltradas]
+  );
+
+  const manejarKeyDownBusqueda = (e) => {
+    if (e.key === 'Enter' && filtroNormalizado && totalResultadosBusqueda === 1) {
+      const unicaSeccion = seccionesFiltradas[0];
+      const unicoProducto = unicaSeccion?.items?.[0];
+      if (unicoProducto) {
+        e.preventDefault();
+        onSeleccionar(unicoProducto, unicaSeccion.categoria);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-      
       {/* CABECERA: BUSCADOR Y TABS */}
-      <div className="border-b border-gray-800 bg-gray-900/20">
-        <div className="p-4 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+      <div className="border-b border-gray-800 bg-gray-900/20 shrink-0">
+        <div className="p-3.5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Utensils className="text-green-500" size={18} />
-              <h2 className="text-xs font-black uppercase tracking-widest text-white">Carta Digital</h2>
+              <Utensils className="text-green-500" size={17} />
+              <h2 className="text-xs font-black uppercase tracking-widest text-white">
+                Carta Digital
+              </h2>
             </div>
-            {filtro && (
-              <span className="text-[11px] bg-green-500 text-black px-2 py-0.5 rounded-full font-black animate-pulse">
-                MODO BÚSQUEDA
+
+            {filtroNormalizado && (
+              <span className="text-[10px] bg-green-500 text-black px-2.5 py-0.5 rounded-full font-black uppercase">
+                {totalResultadosBusqueda} {totalResultadosBusqueda === 1 ? 'resultado' : 'resultados'}
               </span>
             )}
           </div>
-          
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
-            <input 
-              type="text" 
-              placeholder="BUSCAR COMIDA..." 
-              className="w-full bg-black border border-gray-700 rounded-xl py-2.5 pl-10 pr-4 text-[11px] font-bold text-white focus:border-green-500 outline-none transition-all placeholder:text-gray-700"
+
+          <div className="relative flex items-center">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+            />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="BUSCAR COMIDA..."
               value={filtro}
               onChange={(e) => setFiltro(e.target.value.toUpperCase())}
+              onKeyDown={manejarKeyDownBusqueda}
+              className="w-full bg-black border border-gray-700 rounded-xl py-2.5 pl-9 pr-9 text-xs font-bold text-white focus:border-green-500 outline-none transition-all placeholder:text-gray-600"
             />
+            {filtro && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltro('');
+                  inputRef?.current?.focus();
+                }}
+                className="absolute right-2.5 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
 
         {/* NAVEGADOR DE CATEGORÍAS (TABS) */}
-        {!filtro && (
-          <div className="flex items-center gap-1 overflow-x-auto px-4 pb-3 no-scrollbar scroll-smooth">
-            {categorias.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategoriaActiva(cat)}
-                className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase whitespace-nowrap transition-all border ${
-                  categoriaActiva === cat 
-                  ? "bg-green-500 text-black border-green-500 shadow-lg shadow-green-500/20 scale-105" 
-                  : "bg-gray-900/50 text-gray-500 border-gray-800 hover:border-gray-600"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+        {!filtroNormalizado && categorias.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto px-3.5 pb-3 custom-scrollbar">
+            {categorias.map((cat) => {
+              const activa = categoriaActiva === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategoriaActiva(cat)}
+                  className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all border cursor-pointer ${
+                    activa
+                      ? 'bg-green-500 text-black border-green-500 shadow-lg shadow-green-500/20'
+                      : 'bg-gray-900/60 text-gray-400 border-gray-800 hover:text-white hover:border-gray-600'
+                  }`}
+                >
+                  {cat}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* CUERPO DE LA CARTA */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-black/40">
-        <div className="space-y-6">
-          {Object.entries(productos ?? {}).map(([categoria, lista]) => {
-            
-            // Si hay filtro, mostramos todo lo que coincida. 
-            // Si no hay filtro, SOLO mostramos la categoría activa.
-            const mostrarEstaCategoria = filtro ? true : (categoria === categoriaActiva);
-            
-            if (!mostrarEstaCategoria) return null;
-
-            const productosFiltrados = (lista ?? []).filter(p => 
-              p.nombre?.toUpperCase().includes(filtro || "")
-            );
-
-            if (productosFiltrados.length === 0) return null;
-
-            return (
-              <div key={categoria} className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="flex items-center justify-between mb-4">
+      <div className="flex-1 overflow-y-auto p-3.5 custom-scrollbar bg-black/40">
+        {categorias.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-800">
+              <Utensils size={20} className="text-gray-700" />
+            </div>
+            <p className="text-gray-600 font-black text-[11px] uppercase tracking-[0.25em]">
+              Cargando carta...
+            </p>
+          </div>
+        ) : seccionesFiltradas.length === 0 ? (
+          <div className="text-center py-16 space-y-3">
+            <p className="text-gray-400 font-black text-xs uppercase">
+              No hay comidas que coincidan con &ldquo;{filtroNormalizado}&rdquo;
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFiltro('');
+                inputRef?.current?.focus();
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-700 text-[11px] font-black uppercase text-green-400 cursor-pointer"
+            >
+              Ver categoría {categoriaActiva || 'completa'}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {seccionesFiltradas.map(({ categoria, items }) => (
+              <div key={categoria}>
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                     {categoria}
                   </h3>
-                  <span className="text-[11px] text-gray-600 font-bold">{productosFiltrados.length} ITEMS</span>
+                  <span className="text-[11px] text-gray-500 font-bold">
+                    {items.length} {items.length === 1 ? 'ITEM' : 'ITEMS'}
+                  </span>
                 </div>
-                
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {productosFiltrados.map((p) => (
+
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                  {items.map((p) => (
                     <button
-                      key={p.id}
+                      key={`${categoria}-${p.id}`}
+                      type="button"
                       onClick={() => onSeleccionar(p, categoria)}
-                      className="group relative bg-gray-900/30 border border-gray-800/60 p-4 rounded-2xl text-left hover:border-green-500 hover:bg-gray-800/40 transition-all active:scale-95 overflow-hidden"
+                      className="group relative bg-gray-900/35 border border-gray-800/70 p-3.5 rounded-2xl text-left hover:border-green-500 hover:bg-gray-800/40 transition-all active:scale-[0.98] overflow-hidden cursor-pointer flex flex-col justify-between"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      
-                      <p className="text-[11px] font-black text-gray-100 uppercase leading-tight mb-4 h-8 line-clamp-2 group-hover:text-green-400 transition-colors">
+                      <p className="text-[11px] font-black text-gray-100 uppercase leading-snug mb-3 line-clamp-2 group-hover:text-green-400 transition-colors">
                         {p.nombre}
                       </p>
-                      
-                      <div className="flex items-end justify-between">
+
+                      <div className="flex items-end justify-between gap-2">
                         <div className="flex flex-col">
-                          <span className="text-[11px] text-gray-600 font-black uppercase tracking-tighter">Precio</span>
-                          <span className="text-green-500 font-black text-base tracking-tighter">
-                            ${p.precio}
+                          <span className="text-[10px] text-gray-500 font-bold uppercase">
+                            Precio
+                          </span>
+                          <span className="text-green-400 font-black text-base tracking-tight">
+                            ${(Number(p.precio) || 0).toLocaleString('es-AR')}
                           </span>
                         </div>
-                        <div className="w-7 h-7 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 border border-green-500/20 group-hover:bg-green-500 group-hover:text-black transition-all">
-                          <ChevronRight size={14} strokeWidth={4} />
+                        <div className="w-7 h-7 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 border border-green-500/20 group-hover:bg-green-500 group-hover:text-black transition-all shrink-0">
+                          <ChevronRight size={14} strokeWidth={3.5} />
                         </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
-            );
-          })}
-
-          {/* ESTADO VACÍO */}
-          {categorias.length === 0 && (
-            <div className="text-center py-20">
-              <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-800">
-                <Utensils size={20} className="text-gray-700" />
-              </div>
-              <p className="text-gray-700 font-black text-[11px] uppercase tracking-[0.3em]">Cargando carta...</p>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -39,9 +39,16 @@ const parsearContenidoPedido = (pedido) => {
 
         return [];
     } catch (e) {
-        console.error("Error crítico al parsear pedido:", e);
+        console.error('Error crítico al parsear pedido:', e);
         return [];
     }
+};
+
+const limpiarNombreCliente = (rawCliente = '') => {
+    return String(rawCliente)
+        .replace(/^\[WEB\]\s*/i, '')
+        .split('(')[0]
+        .trim();
 };
 
 const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
@@ -51,7 +58,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
     const itemsParseados = useMemo(() => parsearContenidoPedido(pedido), [pedido]);
 
     const textoDetalle = useMemo(() => {
-        if (pedido?.detalleTicket && pedido.detalleTicket.trim() !== "") {
+        if (pedido?.detalleTicket && pedido.detalleTicket.trim() !== '') {
             return pedido.detalleTicket;
         }
         if (itemsParseados.length > 0) {
@@ -62,9 +69,19 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
         return pedido?.detalle || '';
     }, [pedido, itemsParseados]);
 
+    const esWeb = useMemo(() => {
+        const marca = `${pedido?.pj ?? ''} ${pedido?.detalleTicket ?? ''} ${pedido?.cliente ?? ''}`.toUpperCase();
+        return marca.includes('[WEB]') || marca.includes('WEB');
+    }, [pedido]);
+
+    const nombreMostrar = useMemo(() => {
+        const limpio = limpiarNombreCliente(pedido?.cliente || 'CLIENTE');
+        return esWeb ? `[WEB] ${limpio}` : limpio;
+    }, [pedido?.cliente, esWeb]);
+
     const irAEditarAlPOS = () => {
         if (itemsParseados.length === 0) {
-            alert("No se pudo recuperar el detalle del pedido para editar.");
+            alert('No se pudo recuperar el detalle del pedido para editar.');
             return;
         }
 
@@ -85,7 +102,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
 
         const sesionEdicion = {
             idPedido: pedido.id,
-            cliente: pedido.cliente || "",
+            cliente: pedido.cliente || '',
             carrito: carritoNormalizado,
             esEdicion: true
         };
@@ -102,7 +119,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                 refreshData();
             }
         } catch (err) {
-            console.error("Error al actualizar pedido:", err);
+            console.error('Error al actualizar pedido:', err);
         }
     };
 
@@ -117,7 +134,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
 
     const manejarBorrarPedido = async () => {
         const motivo = window.prompt(
-            `¿Borrar pedido #${pedido.id} de ${pedido.cliente}?\nIndicá el motivo (opcional):`
+            `¿Borrar pedido #${pedido.id} de ${nombreMostrar}?\nIndicá el motivo (opcional):`
         );
         if (motivo === null) return;
 
@@ -128,17 +145,17 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                 refreshData();
             }
         } catch (err) {
-            console.error("Error al borrar pedido:", err);
-            alert("No se pudo borrar el pedido.");
+            console.error('Error al borrar pedido:', err);
+            alert('No se pudo borrar el pedido.');
         }
     };
 
-    const esEntregado = Boolean(pedido?.statu && String(pedido.statu).startsWith("ENTREGADO_"));
-    const esPagado = Boolean(pedido?.pagado && pedido.pagado !== "0" && pedido.pagado !== 0);
+    const esEntregado = Boolean(pedido?.statu && String(pedido.statu).startsWith('ENTREGADO_'));
+    const esPagado = Boolean(pedido?.pagado && pedido.pagado !== '0' && pedido.pagado !== 0);
     const estaDesocupado = esEntregado;
     const valorSelectViaje = esEntregado
-        ? String(pedido.statu).replace("ENTREGADO_", "")
-        : (pedido?.statu || "0");
+        ? String(pedido.statu).replace('ENTREGADO_', '')
+        : (pedido?.statu || '0');
 
     const etiquetaMedioPago =
         pedido?.pagado === 'TRANSF'
@@ -161,24 +178,25 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                 #{pedido.id}
             </td>
 
-            <td className="p-3 min-w-[250px]">
+            <td className="p-3 min-w-[220px]">
                 <div className="text-[12px] font-black text-white uppercase leading-tight break-words">
                     <span className="text-orange-400 mr-1.5">[#{pedido.id}]</span>
                     {textoDetalle}
                 </div>
             </td>
 
-            <td className="p-3">
+            <td className="p-3 w-44 max-w-[190px]">
                 <div
-                    className={`text-[12px] font-black uppercase ${
+                    className={`text-[12px] font-black uppercase leading-snug break-words line-clamp-3 ${
                         estaDesocupado ? 'text-gray-400' : 'text-orange-500'
                     }`}
+                    title={nombreMostrar}
                 >
-                    {pedido.cliente}
+                    {nombreMostrar}
                 </div>
                 {esPagado && !estaDesocupado && (
                     <span className="text-[10px] bg-green-500 text-black px-1 rounded font-black italic mt-1 inline-block uppercase">
-                        {pedido.pagado === 1 || pedido.pagado === "1"
+                        {pedido.pagado === 1 || pedido.pagado === '1'
                             ? 'PAGADO'
                             : `PAGÓ ${pedido.pagado}`}
                     </span>
@@ -191,7 +209,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                     onChange={(e) => actualizarEstado({ statu: e.target.value })}
                     disabled={estaDesocupado}
                     className={`bg-black border rounded-lg text-[11px] font-black uppercase p-1.5 outline-none w-full cursor-pointer transition-all ${
-                        pedido.statu === "0"
+                        pedido.statu === '0'
                             ? 'border-gray-800 text-gray-500'
                             : 'border-orange-500 text-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.1)]'
                     }`}
@@ -205,7 +223,7 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                 </select>
             </td>
 
-            <td className="p-3 font-black text-white text-sm text-center">
+            <td className="p-3 font-black text-white text-sm text-center whitespace-nowrap">
                 ${(parseFloat(pedido.importe) || 0).toLocaleString()}
             </td>
 
@@ -313,9 +331,9 @@ const FilaPedido = ({ pedido, refreshData, repartidores = [] }) => {
                     <button
                         type="button"
                         onClick={() => {
-                            const actual = pedido.statu || "0";
+                            const actual = pedido.statu || '0';
                             const nombreLimpio = esEntregado
-                                ? String(actual).replace("ENTREGADO_", "")
+                                ? String(actual).replace('ENTREGADO_', '')
                                 : actual;
 
                             if (esEntregado) {

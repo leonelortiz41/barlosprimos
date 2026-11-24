@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-// La URL apunta a tu servidor local
-const API_URL = 'http://localhost:3000';
+const rawUrl = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+const API_URL = /^https?:\/\//i.test(rawUrl) ? rawUrl : 'http://localhost:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
+  timeout: 6000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -16,6 +17,7 @@ export const api = {
   getHamburguesas: () => apiClient.get('/hamburguesas'),
   getLomitos: () => apiClient.get('/lomitos'),
   getPizzas: () => apiClient.get('/pizzas'),
+  getEmpanadas: () => apiClient.get('/empanadas'),
   getPapas: () => apiClient.get('/papas'),
   getPlatos: () => apiClient.get('/platos'),
   getBebidas: () => apiClient.get('/bebidas'),
@@ -33,13 +35,13 @@ export const api = {
   // --- FUNCIÓN UNIFICADA (Para CardRepartidor y Cuaderno) ---
   updatePedido: async (id, campos) => {
     const promesas = [];
-    if (campos.hasOwnProperty('statu')) {
+    if (Object.prototype.hasOwnProperty.call(campos, 'statu')) {
       promesas.push(apiClient.put(`/statu/${id}`, { statu: campos.statu }));
     }
-    if (campos.hasOwnProperty('pagado')) {
+    if (Object.prototype.hasOwnProperty.call(campos, 'pagado')) {
       promesas.push(apiClient.put(`/pagado/${id}`, { pagado: campos.pagado }));
     }
-    if (campos.hasOwnProperty('pj')) {
+    if (Object.prototype.hasOwnProperty.call(campos, 'pj')) {
       promesas.push(apiClient.put(`/pj/${id}`, { pj: campos.pj }));
     }
     return Promise.all(promesas);
@@ -63,29 +65,32 @@ export const api = {
   deleteProducto: (categoria, id) =>
     apiClient.delete(`/${categoria}/${id}`),
 
-  // --- NUEVO: GESTIÓN DE REPARTIDORES ---
+  // --- GESTIÓN DE REPARTIDORES ---
   getRepartidores: () => apiClient.get('/repartidores'),
 
   addRepartidor: (data) =>
-    apiClient.post('/repartidores', data), // data: { nombre: 'JUAN' }
+    apiClient.post('/repartidores', data),
 
   deleteRepartidor: (id) =>
     apiClient.delete(`/repartidores/${id}`),
-  // Agrega esto en tu objeto api dentro de api.js
-  updateRepartidor: (id, nombre) => apiClient.put(`/repartidores/${id}`, { nombre }),
 
-  // --- CONFIGURACIÓN (COMISIONES Y EXTRAS) ---
-  // Obtiene todos los ajustes (id, atributo, valor, tipo)
+  updateRepartidor: (id, nombre) =>
+    apiClient.put(`/repartidores/${id}`, { nombre }),
+
+  // --- CONFIGURACIÓN GENERAL (COMISIONES Y EXTRAS) ---
   getConfig: () => apiClient.get('/configuracion'),
 
-  // Agrega o actualiza una configuración
-  // data: { atributo: 'COMISION', valor: '500', tipo: 'adicion' }
   updateConfig: (data) =>
     apiClient.post('/configuracion', data),
 
-  // Elimina una configuración específica
   deleteConfig: (id) =>
     apiClient.delete(`/configuracion/${id}`),
+
+  // --- CONFIGURACIÓN APP DE CLIENTES ---
+  getConfigWeb: () => apiClient.get('/configuracion-web'),
+
+  updateConfigWeb: (data) =>
+    apiClient.put('/configuracion-web', data),
 
   /**
    * Envía el reporte de cierre de caja por email
@@ -93,14 +98,10 @@ export const api = {
    */
   enviarReporteEmail: async (data) => {
     try {
-      const response = await axios.post(`${API_URL}/enviar-reporte`, data, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiClient.post('/enviar-reporte', data);
       return response.data;
     } catch (error) {
-      console.error("Error en la API al enviar el mail:", error);
+      console.error('Error en la API al enviar el mail:', error);
       throw error;
     }
   },

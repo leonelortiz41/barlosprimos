@@ -30,14 +30,13 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
     setModalAbierto(true);
   };
 
-  // 1. Lógica de filtrado y cálculos
-  const esPagado = (p) => p.pagado && p.pagado !== "0" && p.pagado !== 0;
+  const esPagado = (p) => p.pagado && p.pagado !== '0' && p.pagado !== 0;
   const pedidosPagados = pedidos.filter(esPagado);
 
   const totalBruto = pedidos.reduce((acc, p) => acc + (parseFloat(p.importe) || 0), 0);
 
   const totalEfectivo = pedidosPagados
-    .filter((p) => p.pagado === 'EFECTIVO' || p.pagado === 1 || p.pagado === "1")
+    .filter((p) => p.pagado === 'EFECTIVO' || p.pagado === 1 || p.pagado === '1')
     .reduce((acc, p) => acc + (parseFloat(p.importe) || 0), 0);
 
   const totalTransf = pedidosPagados
@@ -45,65 +44,63 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
     .reduce((acc, p) => acc + (parseFloat(p.importe) || 0), 0);
 
   const totalBorrados = borrados.reduce((acc, b) => acc + (parseFloat(b.importe) || 0), 0);
-
-  // 2. Métricas de cantidades
   const totalPedidos = pedidos.length;
 
   return (
     <>
-      <div className="w-full flex items-center justify-between gap-4 h-full px-4">
+      <div className="w-full flex items-center justify-between gap-2 h-full px-1 overflow-x-auto custom-scrollbar">
         {/* SECCIÓN DINERO: BRUTO | EFECTIVO | TRANSFERENCIA */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
           {/* Venta Total */}
-          <div className="flex items-center gap-2.5">
-            <div className="bg-blue-500/10 p-2 rounded-xl border border-blue-500/20">
-              <CircleDollarSign className="text-blue-500" size={16} />
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20 shrink-0">
+              <CircleDollarSign className="text-blue-500" size={14} />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-gray-500 uppercase leading-none mb-1 tracking-tighter">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black text-gray-500 uppercase leading-none mb-1 tracking-tight whitespace-nowrap">
                 venta total
               </p>
-              <h2 className="text-base font-black text-white tracking-tighter leading-none">
-                {mostrarMontos ? `$${totalBruto.toLocaleString()}` : "••••••"}
+              <h2 className="text-sm font-black text-white tracking-tight leading-none whitespace-nowrap">
+                {mostrarMontos ? `$${totalBruto.toLocaleString('es-AR')}` : '••••••'}
               </h2>
             </div>
           </div>
 
           {/* Efectivo Caja */}
-          <div className="flex items-center gap-2.5 border-l border-gray-800 pl-5">
-            <div className="bg-green-500/10 p-2 rounded-xl border border-green-500/20">
-              <Wallet className="text-green-500" size={16} />
+          <div className="flex items-center gap-2 border-l border-gray-800 pl-3">
+            <div className="bg-green-500/10 p-1.5 rounded-lg border border-green-500/20 shrink-0">
+              <Wallet className="text-green-500" size={14} />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-green-500 uppercase leading-none mb-1 tracking-tighter">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black text-green-500 uppercase leading-none mb-1 tracking-tight whitespace-nowrap">
                 efectivo
               </p>
-              <h2 className="text-base font-black text-white tracking-tighter leading-none">
-                {mostrarMontos ? `$${totalEfectivo.toLocaleString()}` : "••••••"}
+              <h2 className="text-sm font-black text-white tracking-tight leading-none whitespace-nowrap">
+                {mostrarMontos ? `$${totalEfectivo.toLocaleString('es-AR')}` : '••••••'}
               </h2>
             </div>
           </div>
 
           {/* Transferencias */}
-          <div className="flex items-center gap-2.5 border-l border-gray-800 pl-5">
-            <div className="bg-purple-500/10 p-2 rounded-xl border border-purple-500/20">
-              <Smartphone className="text-purple-500" size={16} />
+          <div className="flex items-center gap-2 border-l border-gray-800 pl-3">
+            <div className="bg-purple-500/10 p-1.5 rounded-lg border border-purple-500/20 shrink-0">
+              <Smartphone className="text-purple-500" size={14} />
             </div>
-            <div>
-              <p className="text-[11px] font-black text-purple-500 uppercase leading-none mb-1 tracking-tighter">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black text-purple-500 uppercase leading-none mb-1 tracking-tight whitespace-nowrap">
                 transferencia
               </p>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-black text-white tracking-tighter leading-none">
-                  {mostrarMontos ? `$${totalTransf.toLocaleString()}` : "••••••"}
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-black text-white tracking-tight leading-none whitespace-nowrap">
+                  {mostrarMontos ? `$${totalTransf.toLocaleString('es-AR')}` : '••••••'}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setMostrarMontos(!mostrarMontos)}
-                  className="text-gray-600 hover:text-white transition-colors"
+                  className="text-gray-500 hover:text-white transition-colors p-0.5 cursor-pointer shrink-0"
                   title={mostrarMontos ? 'Ocultar montos' : 'Mostrar montos'}
                 >
-                  {mostrarMontos ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {mostrarMontos ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
@@ -111,12 +108,12 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
         </div>
 
         {/* MÉTRICAS DE ESTADO Y BORRADOS */}
-        <div className="flex items-center gap-4 border-x border-gray-800 px-5 py-1">
-          <div className="flex items-center gap-2">
-            <ClipboardList size={14} className="text-gray-500" />
+        <div className="flex items-center gap-2.5 border-x border-gray-800 px-3 py-1 shrink-0">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <ClipboardList size={13} className="text-gray-500 shrink-0" />
             <span className="text-xs font-black text-white">
               {totalPedidos}{' '}
-              <span className="text-[11px] text-gray-500 uppercase font-bold">
+              <span className="text-[10px] text-gray-500 uppercase font-bold">
                 pedidos
               </span>
             </span>
@@ -125,21 +122,23 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
           <button
             type="button"
             onClick={abrirModalBorrados}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 transition-all"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 transition-all whitespace-nowrap cursor-pointer"
             title="Ver registro de pedidos borrados (guardado local)"
           >
-            <History size={13} />
-            <span className="text-[11px] font-black uppercase">
+            <History size={12} className="shrink-0" />
+            <span className="text-[10px] font-black uppercase">
               Borrados ({borrados.length})
             </span>
           </button>
         </div>
 
         {/* BOTÓN FINALIZAR DÍA */}
-        <BotonCierreCaja
-          pedidos={pedidos}
-          onBorrarTodo={onBorrarTodo}
-        />
+        <div className="shrink-0">
+          <BotonCierreCaja
+            pedidos={pedidos}
+            onBorrarTodo={onBorrarTodo}
+          />
+        </div>
       </div>
 
       {/* MODAL REGISTRO DE PEDIDOS BORRADOS */}
@@ -155,7 +154,7 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
                 <p className="text-[11px] text-gray-400 mt-0.5">
                   Guardado en este navegador · Total anulado:{' '}
                   <strong className="text-red-400">
-                    ${totalBorrados.toLocaleString()}
+                    ${totalBorrados.toLocaleString('es-AR')}
                   </strong>
                 </p>
               </div>
@@ -163,7 +162,7 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
               <button
                 type="button"
                 onClick={() => setModalAbierto(false)}
-                className="p-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                className="p-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors cursor-pointer"
                 title="Cerrar"
               >
                 <X size={16} />
@@ -206,7 +205,7 @@ const ResumenCaja = ({ pedidos = [], onBorrarTodo, tickBorrados = 0 }) => {
                           {b.motivo}
                         </td>
                         <td className="py-2.5 px-3 text-right font-black text-red-400 whitespace-nowrap">
-                          ${(parseFloat(b.importe) || 0).toLocaleString()}
+                          ${(parseFloat(b.importe) || 0).toLocaleString('es-AR')}
                         </td>
                       </tr>
                     ))}

@@ -7,9 +7,26 @@
 }
 
 @layer base {
+  html,
   body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
     background-color: black;
     color: white;
+  }
+
+  #root {
+    min-height: 100svh;
+    width: 100%;
+  }
+}
+
+@layer components {
+  .input-dark {
+    @apply bg-gray-900 border border-gray-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-orange-500 transition-colors;
   }
 }
 
@@ -24,11 +41,12 @@
 /* Estilo para la barra de scroll personalizada */
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
+  height: 5px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  border-radius: 7px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -41,12 +59,61 @@
   background: #fb923c;
 }
 
-/* Evitar que el scroll horizontal aparezca por error */
-body {
-  overflow: hidden;
-  background-color: black;
-}
+@layer utilities {
+  @keyframes fadeUpLite {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
 
-.input-dark {
-  @apply bg-gray-900 border border-gray-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-orange-500 transition-all;
+  @keyframes slideUpLite {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 24px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes slideRightLite {
+    from {
+      opacity: 0;
+      transform: translate3d(24px, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .anim-fade-up {
+    animation: fadeUpLite 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .anim-modal-sheet {
+    animation: slideUpLite 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .anim-drawer-right {
+    animation: slideRightLite 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .anim-fade-up,
+    .anim-modal-sheet,
+    .anim-drawer-right {
+      animation: none !important;
+      will-change: auto !important;
+    }
+  }
 }
