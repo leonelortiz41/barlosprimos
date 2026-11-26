@@ -55,9 +55,15 @@ const ResumenPedido = ({
   const puedeConfirmar =
     carrito.length > 0 && Boolean(cliente && cliente.trim()) && !procesando;
 
+  const handleKeyDownCliente = (e) => {
+    if (e.key !== 'Enter' || e.nativeEvent?.isComposing) return;
+    e.preventDefault();
+    if (!puedeConfirmar) return;
+    onConfirmar?.();
+  };
+
   return (
     <div className="bg-[#0a0a0a] border border-gray-800 rounded-2xl flex flex-col h-full overflow-hidden shadow-2xl relative">
-      
       {/* SECCIÓN CLIENTE / MESA */}
       <div className="p-4 border-b border-gray-800 bg-gray-900/20 flex-shrink-0">
         <div className="relative group">
@@ -79,6 +85,7 @@ const ResumenPedido = ({
             }`}
             value={cliente}
             onChange={(e) => setCliente(e.target.value.toUpperCase())}
+            onKeyDown={handleKeyDownCliente}
           />
         </div>
       </div>

@@ -13,7 +13,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Check
+  Check,
+  UtensilsCrossed
 } from 'lucide-react';
 
 const CONFIRMADOS_KEY = 'bar_los_primos_pedidos_confirmados_v1';
@@ -47,30 +48,55 @@ const guardarConfirmados = (ids) => {
   }
 };
 
+const extraerNumeroMesa = (pedido = {}) => {
+  if (pedido?.mesa != null && String(pedido.mesa).trim() !== '') {
+    const n = Number.parseInt(String(pedido.mesa).replace(/\D/g, ''), 10);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  const fuente = `${pedido?.cliente ?? ''} ${pedido?.detalleTicket ?? ''}`;
+  const match = fuente.match(/\[?MESA\s*#?\s*(\d+)\]?/i);
+  if (match?.[1]) {
+    const n = Number.parseInt(match[1], 10);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return null;
+};
+
+const esPedidoMesa = (pedido = {}) => {
+  if (String(pedido?.tipoEntrega || '').toUpperCase() === 'MESA') return true;
+  if (String(pedido?.origen || '').toUpperCase().includes('MESA')) return true;
+  return extraerNumeroMesa(pedido) !== null;
+};
+
 const extraerNombreLimpio = (rawCliente = '') => {
   const sinPrefijo = String(rawCliente)
-    .replace(/^\[WEB\]\s*/i, '')
+    .replace(/^\[(?:WEB|MESA\s*#?\s*\d+)\]\s*/i, '')
     .trim();
   const soloNombre = sinPrefijo.split(/[·|]/)[0].trim();
   return soloNombre || 'Cliente';
 };
 
 const extraerDireccionPedido = (pedido = {}) => {
+  if (esPedidoMesa(pedido)) return '';
+
   if (pedido?.direccion && String(pedido.direccion).trim()) {
     return String(pedido.direccion).trim();
   }
 
   const partesCliente = String(pedido?.cliente || '')
-    .replace(/^\[WEB\]\s*/i, '')
+    .replace(/^\[(?:WEB|MESA\s*#?\s*\d+)\]\s*/i, '')
     .split(/[·|]/)
     .map((p) => p.trim())
     .filter(Boolean);
 
   for (const parte of partesCliente.slice(1)) {
-    const sinEtiqueta = parte.replace(/^(?:DIR(?:ECCION|ECCIÓN)?|DOMICILIO|ENV[ÍI]O)[:\s-]*/i, '').trim();
+    const sinEtiqueta = parte
+      .replace(/^(?:DIR(?:ECCION|ECCIÓN)?|DOMICILIO|ENV[ÍI]O)[:\s-]*/i, '')
+      .trim();
     const esSoloTel = /^(?:TEL[:\s]*|WHATSAPP[:\s]*|\+?54\s*9?\s*)?\d{7,}$/i.test(parte);
     const esRetiro = /^RETIRO(?:\s+EN\s+LOCAL)?$/i.test(sinEtiqueta);
-    if (sinEtiqueta && !esSoloTel && !esRetiro) {
+    const esMesaTxt = /^MESA\s*#?\s*\d+$/i.test(sinEtiqueta);
+    if (sinEtiqueta && !esSoloTel && !esRetiro && !esMesaTxt) {
       return sinEtiqueta;
     }
   }
@@ -89,27 +115,58 @@ const extraerDireccionPedido = (pedido = {}) => {
   return '';
 };
 
-const construirClienteConfirmado = (pedido = {}) => {
-  const nombre = extraerNombreLimpio(pedido?.cliente || 'Cliente');
-  const direccion = extraerDireccionPedido(pedido);
-  if (!direccion) return nombre;
-  if (nombre.toUpperCase().includes(direccion.toUpperCase())) return nombre;
-  return `${nombre} · ${direccion}`;
-};
-
 const esPedidoWeb = (pedido) => {
+  if (esPedidoMesa(pedido)) return true;
   const texto = `${pedido?.pj ?? ''} ${pedido?.detalleTicket ?? ''} ${pedido?.cliente ?? ''}`.toUpperCase();
   return texto.includes('[WEB]') || texto.includes('WEB') || texto.includes('TEL:');
 };
 
 const extraerTelefonoPedido = (pedido) => {
-  if (pedido?.telefono) {
-    return String(pedido.telefono).replace(/\D/g, '');
+  if (esPedidoMesa(pedido)) return '';
+  const directo = pedido?.telefono || pedido?.celular || pedido?.whatsapp;
+  if (directo) {
+    return String(directo).replace(/\D/g, '');
   }
   const fuente = `${pedido?.cliente ?? ''} ${pedido?.detalleTicket ?? ''}`;
   const matchTel = fuente.match(/(?:TEL[:\s]*|WHATSAPP[:\s]*|\+?54\s*9?\s*)?(\d{10,13})/i);
   if (!matchTel) return '';
   return matchTel[1].replace(/\D/g, '');
+};
+
+const formatearTelefonoLegible = (pedido = {}) => {
+  const digitos = extraerTelefonoPedido(pedido);
+  if (!digitos) return '';
+  if (digitos.startsWith('549') && digitos.length > 10) {
+    return digitos.slice(3);
+  }
+  if (digitos.startsWith('54') && digitos.length > 10) {
+    return digitos.slice(2);
+  }
+  return digitos;
+};
+
+const construirClienteConfirmado = (pedido = {}) => {
+  const nombre = extraerNombreLimpio(pedido?.cliente || 'Cliente');
+  const numMesa = extraerNumeroMesa(pedido);
+
+  if (esPedidoMesa(pedido)) {
+    return numMesa ? `${nombre} · Mesa #${numMesa}` : `${nombre} · Mesa`;
+  }
+
+  const direccion = extraerDireccionPedido(pedido);
+  const telefono = formatearTelefonoLegible(pedido);
+
+  const partes = [nombre];
+
+  if (direccion && !nombre.toUpperCase().includes(direccion.toUpperCase())) {
+    partes.push(direccion);
+  }
+
+  if (telefono && !partes.join(' ').includes(telefono)) {
+    partes.push(`Tel: ${telefono}`);
+  }
+
+  return partes.join(' · ');
 };
 
 const construirUrlWhatsApp = (pedido) => {
@@ -306,7 +363,7 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
     } catch (err) {
       console.error('Error al confirmar y actualizar datos del pedido:', err);
       if (mostrarAlerta) {
-        alert('No se pudo actualizar el cliente y la dirección en el servidor.');
+        alert('No se pudo actualizar los datos del pedido en el servidor.');
       }
       return false;
     } finally {
@@ -493,9 +550,12 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
 
               <div className="max-h-72 overflow-y-auto custom-scrollbar divide-y divide-white/10">
                 {pedidosPorConfirmar.map((ped) => {
+                  const esMesa = esPedidoMesa(ped);
+                  const numMesa = extraerNumeroMesa(ped);
                   const waUrl = construirUrlWhatsApp(ped);
                   const nombreLimpio = extraerNombreLimpio(ped?.cliente || 'CLIENTE');
-                  const estaConfirmando = confirmandoId === String(ped.id) || confirmandoTodos;
+                  const direccionPedido = extraerDireccionPedido(ped);
+                  const telefonoLegible = formatearTelefonoLegible(ped);
 
                   return (
                     <div key={ped.id} className="p-3 space-y-2 hover:bg-white/[0.03]">
@@ -509,6 +569,30 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
                         </span>
                       </div>
 
+                      {esMesa && (
+                        <div className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2.5 py-1 rounded-lg">
+                          <UtensilsCrossed size={12} />
+                          <span>{numMesa ? `Mesa #${numMesa}` : 'Consumo en Mesa'}</span>
+                        </div>
+                      )}
+
+                      {!esMesa && (direccionPedido || telefonoLegible) && (
+                        <div className="text-[11px] text-gray-300 space-y-0.5">
+                          {direccionPedido && (
+                            <p className="truncate">
+                              <span className="text-gray-500 font-bold uppercase mr-1">Dir:</span>
+                              {direccionPedido}
+                            </p>
+                          )}
+                          {telefonoLegible && (
+                            <p className="truncate">
+                              <span className="text-gray-500 font-bold uppercase mr-1">Cel:</span>
+                              {telefonoLegible}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {ped.detalleTicket && (
                         <p className="text-[11px] text-gray-400 line-clamp-2">
                           {ped.detalleTicket}
@@ -516,7 +600,11 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
                       )}
 
                       <div className="flex items-center justify-between gap-2 pt-0.5">
-                        {waUrl ? (
+                        {esMesa ? (
+                          <span className="text-[10px] font-black uppercase text-amber-300/90">
+                            Pedido en salón
+                          </span>
+                        ) : waUrl ? (
                           <a
                             href={waUrl}
                             target="_blank"
@@ -534,7 +622,7 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
 
                         <button
                           type="button"
-                          disabled={estaConfirmando}
+                          disabled={confirmandoId === String(ped.id) || confirmandoTodos}
                           onClick={() => confirmarPedidoYLimpiarNombre(ped)}
                           className="inline-flex items-center gap-1 text-[11px] font-black uppercase bg-white/10 hover:bg-emerald-600 disabled:opacity-50 text-emerald-300 hover:text-white border border-white/15 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
                         >

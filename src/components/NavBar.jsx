@@ -26,9 +26,12 @@ const Navbar = ({ tiendaAbierta = true, pedidosPorConfirmar = 0 }) => {
         <NavLink
           to="/cuaderno"
           className={({ isActive }) => {
-            const baseClase = isActive ? active : inactive;
-            if (!hayPendientes) return baseClase;
-            return `${baseClase} px-2.5 py-1 bg-amber-500/15 text-amber-300 border border-amber-400/50 shadow-[0_0_16px_rgba(245,158,11,0.25)] animate-pulse`;
+            if (!hayPendientes) {
+              return isActive ? active : inactive;
+            }
+            return `${linkBase} px-2.5 py-1 bg-amber-500/15 text-amber-300 border border-amber-400/50 shadow-[0_0_16px_rgba(245,158,11,0.2)] ${
+              isActive ? 'ring-1 ring-orange-500/60' : ''
+            }`;
           }}
           title={
             hayPendientes

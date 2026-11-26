@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Globe, Store, Bike, Save, Search, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Globe, Bike, Save, Search, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const STORAGE_KEY = 'bar_los_primos_config_web_v1';
+const MENSAJE_DEFECTO = 'Estamos cerrados por el momento. Volvé a intentar más tarde.';
 
 const CATEGORIAS = [
   'hamburguesas',
@@ -32,8 +33,20 @@ const guardarCacheLocal = (data) => {
   }
 };
 
+const crearFirmaEstado = ({ tiendaAbierta, envioActivo, mensajeCierre, idsSet }) =>
+  JSON.stringify({
+    tiendaAbierta: Boolean(tiendaAbierta),
+    envioActivo: Boolean(envioActivo),
+    retiroActivo: true,
+    mensajeCierre: String(mensajeCierre ?? '').trim(),
+    idsPausadosWeb: Array.from(idsSet || []).sort()
+  });
+
 const ConfigAppWeb = ({ onEstadoWebChange }) => {
   const cacheInicial = leerCacheLocal();
+  const pausaInicial = Array.isArray(cacheInicial?.idsPausadosWeb)
+    ? cacheInicial.idsPausadosWeb
+    : [];
 
   const [tiendaAbierta, setTiendaAbierta] = useState(
     typeof cacheInicial?.tiendaAbierta === 'boolean' ? cacheInicial.tiendaAbierta : true
@@ -41,21 +54,42 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
   const [envioActivo, setEnvioActivo] = useState(
     typeof cacheInicial?.envioActivo === 'boolean' ? cacheInicial.envioActivo : true
   );
-  const [retiroActivo, setRetiroActivo] = useState(
-    typeof cacheInicial?.retiroActivo === 'boolean' ? cacheInicial.retiroActivo : true
-  );
+  const retiroActivo = true;
+
   const [mensajeCierre, setMensajeCierre] = useState(
-    cacheInicial?.mensajeCierre || 'Estamos cerrados por el momento. Volvé a intentar más tarde.'
+    cacheInicial?.mensajeCierre || MENSAJE_DEFECTO
   );
   const [productos, setProductos] = useState([]);
-  const [idsPausadosWeb, setIdsPausadosWeb] = useState(
-    () => new Set(Array.isArray(cacheInicial?.idsPausadosWeb) ? cacheInicial.idsPausadosWeb : [])
+  const [idsPausadosWeb, setIdsPausadosWeb] = useState(() => new Set(pausaInicial));
+  const [firmaGuardada, setFirmaGuardada] = useState(() =>
+    crearFirmaEstado({
+      tiendaAbierta:
+        typeof cacheInicial?.tiendaAbierta === 'boolean' ? cacheInicial.tiendaAbierta : true,
+      envioActivo:
+        typeof cacheInicial?.envioActivo === 'boolean' ? cacheInicial.envioActivo : true,
+      mensajeCierre: cacheInicial?.mensajeCierre || MENSAJE_DEFECTO,
+      idsSet: pausaInicial
+    })
   );
+
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [busqueda, setBusqueda] = useState('');
   const [cargandoMenu, setCargandoMenu] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState('');
+
+  const firmaActual = useMemo(
+    () =>
+      crearFirmaEstado({
+        tiendaAbierta,
+        envioActivo,
+        mensajeCierre,
+        idsSet: idsPausadosWeb
+      }),
+    [tiendaAbierta, envioActivo, mensajeCierre, idsPausadosWeb]
+  );
+
+  const hayCambiosSinGuardar = firmaActual !== firmaGuardada;
 
   useEffect(() => {
     let activa = true;
@@ -66,14 +100,38 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
         const resCfg = await fetch(`${API_URL}/configuracion-web`);
         if (resCfg.ok && activa) {
           const cfg = await resCfg.json();
-          if (typeof cfg.tiendaAbierta === 'boolean') setTiendaAbierta(cfg.tiendaAbierta);
-          if (typeof cfg.envioActivo === 'boolean') setEnvioActivo(cfg.envioActivo);
-          if (typeof cfg.retiroActivo === 'boolean') setRetiroActivo(cfg.retiroActivo);
-          if (cfg.mensajeCierre) setMensajeCierre(cfg.mensajeCierre);
-          if (Array.isArray(cfg.idsPausadosWeb)) {
-            setIdsPausadosWeb(new Set(cfg.idsPausadosWeb));
-          }
-          guardarCacheLocal(cfg);
+          const abiertaSrv =
+            typeof cfg.tiendaAbierta === 'boolean' ? cfg.tiendaAbierta : tiendaAbierta;
+          const envioSrv =
+            typeof cfg.envioActivo === 'boolean' ? cfg.envioActivo : envioActivo;
+          const mensajeSrv = cfg.mensajeCierre ?? mensajeCierre;
+          const pausadosSrv = Array.isArray(cfg.idsPausadosWeb)
+            ? cfg.idsPausadosWeb
+            : Array.from(idsPausadosWeb);
+
+          setTiendaAbierta(abiertaSrv);
+          setEnvioActivo(envioSrv);
+          setMensajeCierre(mensajeSrv);
+          setIdsPausadosWeb(new Set(pausadosSrv));
+
+          const normalizada = {
+            ...cfg,
+            tiendaAbierta: abiertaSrv,
+            envioActivo: envioSrv,
+            retiroActivo: true,
+            mensajeCierre: mensajeSrv,
+            idsPausadosWeb: pausadosSrv
+          };
+
+          guardarCacheLocal(normalizada);
+          setFirmaGuardada(
+            crearFirmaEstado({
+              tiendaAbierta: abiertaSrv,
+              envioActivo: envioSrv,
+              mensajeCierre: mensajeSrv,
+              idsSet: pausadosSrv
+            })
+          );
         }
       } catch {
         // Usa el estado inicial o la caché local si el endpoint no existe
@@ -109,7 +167,7 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
     };
   }, []);
 
-  const claveProducto = (p) => `${p.clase}-${p.id}`;
+  const claveProducto = useCallback((p) => `${p.clase}-${p.id}`, []);
 
   const toggleDisponibilidadProducto = (prod) => {
     const clave = claveProducto(prod);
@@ -140,15 +198,19 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
   }, [productos, filtroCategoria, busqueda]);
 
   const guardarConfiguracionWeb = async () => {
+    if (!hayCambiosSinGuardar || guardando) return;
     setGuardando(true);
     setAviso('');
+
+    const mensajeLimpio = mensajeCierre.trim();
+    const listaPausados = Array.from(idsPausadosWeb);
 
     const payload = {
       tiendaAbierta,
       envioActivo,
       retiroActivo,
-      mensajeCierre: mensajeCierre.trim(),
-      idsPausadosWeb: Array.from(idsPausadosWeb)
+      mensajeCierre: mensajeLimpio,
+      idsPausadosWeb: listaPausados
     };
 
     guardarCacheLocal(payload);
@@ -160,9 +222,26 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error('Error al guardar');
+
+      setFirmaGuardada(
+        crearFirmaEstado({
+          tiendaAbierta,
+          envioActivo,
+          mensajeCierre: mensajeLimpio,
+          idsSet: listaPausados
+        })
+      );
       onEstadoWebChange?.(tiendaAbierta);
       setAviso('Configuración de la app de clientes guardada.');
     } catch {
+      setFirmaGuardada(
+        crearFirmaEstado({
+          tiendaAbierta,
+          envioActivo,
+          mensajeCierre: mensajeLimpio,
+          idsSet: listaPausados
+        })
+      );
       onEstadoWebChange?.(tiendaAbierta);
       setAviso('Guardado en este equipo (sin conexión o endpoint PUT /configuracion-web pendiente).');
     } finally {
@@ -181,18 +260,25 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
             Configuración App de Clientes
           </h2>
           <p className="text-xs text-gray-400">
-            Controlá apertura de la tienda web, entregas y comidas disponibles para pedir.
+            Controlá apertura de la tienda web, envíos a domicilio y comidas disponibles.
           </p>
         </div>
 
         <button
           type="button"
           onClick={guardarConfiguracionWeb}
-          disabled={guardando}
-          className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer shrink-0"
+          disabled={!hayCambiosSinGuardar || guardando}
+          className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 ${
+            hayCambiosSinGuardar && !guardando
+              ? 'bg-orange-500 hover:bg-orange-400 text-black ring-2 ring-amber-300/80 shadow-[0_0_24px_rgba(249,115,22,0.75)] animate-pulse scale-[1.02] cursor-pointer'
+              : 'bg-white/[0.06] text-gray-500 border border-white/10 opacity-65 cursor-not-allowed'
+          }`}
         >
           <Save size={16} />
-          {guardando ? 'Guardando...' : 'Guardar Cambios'}
+          <span>{guardando ? 'Guardando...' : 'Guardar Cambios'}</span>
+          {hayCambiosSinGuardar && !guardando && (
+            <span className="w-2 h-2 rounded-full bg-black animate-ping" />
+          )}
         </button>
       </div>
 
@@ -204,10 +290,13 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
       )}
 
       {/* Interruptores principales de la tienda web */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button
           type="button"
-          onClick={() => setTiendaAbierta((v) => !v)}
+          onClick={() => {
+            setAviso('');
+            setTiendaAbierta((v) => !v);
+          }}
           className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
             tiendaAbierta
               ? 'bg-emerald-500/10 border-emerald-500/40'
@@ -228,7 +317,10 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
 
         <button
           type="button"
-          onClick={() => setEnvioActivo((v) => !v)}
+          onClick={() => {
+            setAviso('');
+            setEnvioActivo((v) => !v);
+          }}
           className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
             envioActivo
               ? 'bg-[#111318] border-orange-500/40 text-white'
@@ -243,24 +335,6 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
             {envioActivo ? 'Habilitado en la web' : 'Deshabilitado'}
           </div>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setRetiroActivo((v) => !v)}
-          className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
-            retiroActivo
-              ? 'bg-[#111318] border-orange-500/40 text-white'
-              : 'bg-[#111318] border-white/10 text-gray-500'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-xs font-black uppercase">
-            <Store size={16} className="text-orange-400" />
-            <span>Retiro en local</span>
-          </div>
-          <div className="text-xs font-bold mt-1">
-            {retiroActivo ? 'Habilitado en la web' : 'Deshabilitado'}
-          </div>
-        </button>
       </div>
 
       {/* Mensaje cuando la tienda web está cerrada o pausada */}
@@ -272,7 +346,10 @@ const ConfigAppWeb = ({ onEstadoWebChange }) => {
         <input
           type="text"
           value={mensajeCierre}
-          onChange={(e) => setMensajeCierre(e.target.value)}
+          onChange={(e) => {
+            setAviso('');
+            setMensajeCierre(e.target.value);
+          }}
           maxLength={180}
           className="w-full bg-black/60 border border-white/15 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none focus:border-orange-500"
         />

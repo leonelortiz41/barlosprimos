@@ -45,6 +45,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
   const [fechaManual, setFechaManual] = useState(new Date().toISOString().split('T')[0]);
   const [valorComisionBase, setValorComisionBase] = useState(0);
   const [enviandoPDF, setEnviandoPDF] = useState(false);
+  const [reiniciandoDia, setReiniciandoDia] = useState(false);
   const [pedidosBorrados, setPedidosBorrados] = useState([]);
 
   // 1. CARGAR COMISIÓN DE REPARTIDORES DESDE DB Y BORRADOS LOCALES
@@ -449,6 +450,40 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
     ventana.document.close();
   };
 
+  const deshabilitarWebSiEstaActiva = async () => {
+    try {
+      const res = await api.getConfigWeb();
+      const actual = res?.data?.data ?? res?.data ?? {};
+      if (actual.tiendaAbierta !== false) {
+        await api.updateConfigWeb({
+          ...actual,
+          tiendaAbierta: false
+        });
+      }
+    } catch (err) {
+      console.error('No se pudo deshabilitar la página web al reiniciar el día:', err);
+    }
+  };
+
+  const handleReiniciarDia = async () => {
+    if (reiniciandoDia || enviandoPDF) return;
+    const confirmado = window.confirm(
+      '⚠️ ¿BORRAR TODO EL CUADERNO?\n\nSe eliminarán todos los pedidos para empezar un nuevo día y se deshabilitará la página web si está activa.'
+    );
+    if (!confirmado) return;
+
+    setReiniciandoDia(true);
+    try {
+      await deshabilitarWebSiEstaActiva();
+      await onBorrarTodo?.();
+      setModalAbierto(false);
+    } finally {
+      setReiniciandoDia(false);
+    }
+  };
+
+  const bloqueado = enviandoPDF || reiniciandoDia;
+
   return (
     <>
       <button
@@ -468,7 +503,8 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
               <button
                 type="button"
                 onClick={() => setModalAbierto(false)}
-                className="text-gray-500 hover:text-white"
+                disabled={bloqueado}
+                className="text-gray-500 hover:text-white disabled:opacity-50"
               >
                 <X size={20} />
               </button>
@@ -503,7 +539,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
                 <button
                   type="button"
                   onClick={imprimirTicketRapido}
-                  disabled={enviandoPDF}
+                  disabled={bloqueado}
                   className="bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex flex-col items-center gap-2 hover:bg-orange-500 transition-all disabled:opacity-50"
                 >
                   <Printer size={18} /> Ticket Rápido
@@ -511,7 +547,7 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
                 <button
                   type="button"
                   onClick={descargarPDFReporte}
-                  disabled={enviandoPDF}
+                  disabled={bloqueado}
                   className="bg-blue-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase flex flex-col items-center gap-2 hover:bg-blue-500 transition-all disabled:opacity-50"
                 >
                   <FileDown size={18} /> {enviandoPDF ? 'Enviando...' : 'Reporte PDF'}
@@ -520,16 +556,11 @@ const BotonCierreCaja = ({ pedidos = [], onBorrarTodo }) => {
 
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm('⚠️ ¿BORRAR TODO EL CUADERNO?\n\nSe eliminarán todos los pedidos para empezar un nuevo día.')) {
-                    onBorrarTodo();
-                    setModalAbierto(false);
-                  }
-                }}
-                disabled={enviandoPDF}
+                onClick={handleReiniciarDia}
+                disabled={bloqueado}
                 className="w-full bg-red-600/10 text-red-500 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-3 border border-red-500/20 hover:bg-red-600 hover:text-white transition-all shadow-lg disabled:opacity-50"
               >
-                <Trash2 size={16} /> Reiniciar Día
+                <Trash2 size={16} /> {reiniciandoDia ? 'Reiniciando...' : 'Reiniciar Día'}
               </button>
             </div>
           </div>

@@ -32,10 +32,18 @@ const leerIdsConfirmados = () => {
   }
 };
 
+const esPedidoMesaPendiente = (pedido) => {
+  if (String(pedido?.tipoEntrega || '').toUpperCase() === 'MESA') return true;
+  if (String(pedido?.origen || '').toUpperCase().includes('MESA')) return true;
+  const fuente = `${pedido?.cliente ?? ''} ${pedido?.detalleTicket ?? ''}`;
+  return /\[?MESA\s*#?\s*\d+\]?/i.test(fuente);
+};
+
 const esPedidoWebPendiente = (pedido, setConfirmados) => {
   if (!pedido || pedido.id == null) return false;
   if (String(pedido?.statu || '').startsWith('ENTREGADO_')) return false;
   if (setConfirmados.has(String(pedido.id))) return false;
+  if (esPedidoMesaPendiente(pedido)) return true;
   const marca = `${pedido?.pj ?? ''} ${pedido?.detalleTicket ?? ''} ${pedido?.cliente ?? ''}`.toUpperCase();
   return marca.includes('[WEB]') || marca.includes('WEB') || marca.includes('TEL:');
 };
