@@ -106,11 +106,18 @@ const Configuracion = () => {
       {/* RENDERIZADO CONDICIONAL */}
       <div className="animate-in fade-in zoom-in-95 duration-300">
         {activeTab === 'menu' && (
-          <SeccionCarta
-            productos={datos.productos}
-            cargando={cargando}
-            refresh={cargarDatos}
-          />
+          <>
+            {cargando && (
+              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3 text-center">
+                Actualizando carta...
+              </p>
+            )}
+            <SeccionCarta
+              productos={datos.productos}
+              cargando={cargando}
+              refresh={cargarDatos}
+            />
+          </>
         )}
 
         {activeTab === 'repartidores' && (

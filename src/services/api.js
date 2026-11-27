@@ -11,6 +11,15 @@ const apiClient = axios.create({
   },
 });
 
+export const getImagenUrl = (ruta) => {
+  if (!ruta || typeof ruta !== 'string') return '';
+  const limpia = ruta.trim();
+  if (!limpia) return '';
+  if (/^(https?:\/\/|data:image\/)/i.test(limpia)) return limpia;
+  const normalizada = limpia.startsWith('/') ? limpia : `/${limpia}`;
+  return `${API_URL}${normalizada}`;
+};
+
 export const api = {
   // --- OBTENER PRODUCTOS (GET) ---
   getMilanesas: () => apiClient.get('/milanesas'),
@@ -55,12 +64,15 @@ export const api = {
   postDate: (fecha) => apiClient.post('/date', { fecha }),
   deleteDate: () => apiClient.delete('/date'),
 
-  // --- GESTIÓN DE CARTA (PRECIOS, ALTAS Y BAJAS) ---
+  // --- GESTIÓN DE CARTA (PRECIOS, FOTOS, ALTAS Y BAJAS) ---
   updatePrecio: (categoria, id, nuevoPrecio) =>
     apiClient.put(`/${categoria}/${id}`, { precio: nuevoPrecio }),
 
+  updateProducto: (categoria, id, data) =>
+    apiClient.put(`/${categoria}/${id}`, data, { timeout: 20000 }),
+
   addProducto: (categoria, data) =>
-    apiClient.post(`/${categoria}`, data),
+    apiClient.post(`/${categoria}`, data, { timeout: 20000 }),
 
   deleteProducto: (categoria, id) =>
     apiClient.delete(`/${categoria}/${id}`),
@@ -98,7 +110,7 @@ export const api = {
    */
   enviarReporteEmail: async (data) => {
     try {
-      const response = await apiClient.post('/enviar-reporte', data);
+      const response = await apiClient.post('/enviar-reporte', data, { timeout: 20000 });
       return response.data;
     } catch (error) {
       console.error('Error en la API al enviar el mail:', error);
@@ -107,4 +119,5 @@ export const api = {
   },
 };
 
+export { API_URL };
 export default api;

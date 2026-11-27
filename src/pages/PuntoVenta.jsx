@@ -83,6 +83,7 @@ const PuntoVenta = () => {
         nombre: "",
         precioBase: 0,
         clase: "",
+        imagen: null,
         agregados: {},
         ingredientes: { ...INGREDIENTES_BASE_POR_DEFECTO }
     });
@@ -175,6 +176,7 @@ const PuntoVenta = () => {
                     precioUnitario,
                     hidden_precio: precioUnitario,
                     hidden_clase: clase,
+                    imagen: p.imagen || null,
                     cantidad: 1
                 }
             ]);
@@ -203,6 +205,7 @@ const PuntoVenta = () => {
             nombre: p.nombre,
             precioBase: p.precio,
             clase,
+            imagen: p.imagen || null,
             agregados: agregadosIniciales,
             ingredientes: ingredientesBase
         });
@@ -245,11 +248,12 @@ const PuntoVenta = () => {
                 precioUnitario,
                 hidden_precio: Math.round(precioUnitario),
                 hidden_clase: config.clase,
+                imagen: config.imagen || null,
                 cantidad: 1
             }
         ]);
 
-        setConfig((prev) => ({ ...prev, nombre: "" }));
+        setConfig((prev) => ({ ...prev, nombre: "", imagen: null }));
         setFiltro("");
     };
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Utensils, ChevronRight, X } from 'lucide-react';
+import { getImagenUrl } from '../../services/api.js';
 
 const ListaProductos = ({ productos, filtro, setFiltro, onSeleccionar, inputRef }) => {
   const [categoriaActiva, setCategoriaActiva] = useState('');
+  const [imagenesRotas, setImagenesRotas] = useState({});
 
   const categorias = useMemo(() => Object.keys(productos ?? {}), [productos]);
 
@@ -162,32 +164,53 @@ const ListaProductos = ({ productos, filtro, setFiltro, onSeleccionar, inputRef 
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
-                  {items.map((p) => (
-                    <button
-                      key={`${categoria}-${p.id}`}
-                      type="button"
-                      onClick={() => onSeleccionar(p, categoria)}
-                      className="group relative bg-gray-900/35 border border-gray-800/70 p-3.5 rounded-2xl text-left hover:border-green-500 hover:bg-gray-800/40 transition-all active:scale-[0.98] overflow-hidden cursor-pointer flex flex-col justify-between"
-                    >
-                      <p className="text-[11px] font-black text-gray-100 uppercase leading-snug mb-3 line-clamp-2 group-hover:text-green-400 transition-colors">
-                        {p.nombre}
-                      </p>
+                  {items.map((p) => {
+                    const claveProd = `${categoria}-${p.id}`;
+                    const srcImagen = !imagenesRotas[claveProd] ? getImagenUrl(p.imagen) : '';
 
-                      <div className="flex items-end justify-between gap-2">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-gray-500 font-bold uppercase">
-                            Precio
-                          </span>
-                          <span className="text-green-400 font-black text-base tracking-tight">
-                            ${(Number(p.precio) || 0).toLocaleString('es-AR')}
-                          </span>
+                    return (
+                      <button
+                        key={claveProd}
+                        type="button"
+                        onClick={() => onSeleccionar(p, categoria)}
+                        className="group relative bg-gray-900/35 border border-gray-800/70 p-3 rounded-2xl text-left hover:border-green-500 hover:bg-gray-800/40 transition-all active:scale-[0.98] overflow-hidden cursor-pointer flex flex-col justify-between"
+                      >
+                        <div>
+                          {srcImagen && (
+                            <div className="w-full h-24 mb-2.5 rounded-xl overflow-hidden bg-black/60 border border-white/5">
+                              <img
+                                src={srcImagen}
+                                alt={p.nombre || 'Producto'}
+                                loading="lazy"
+                                onError={() =>
+                                  setImagenesRotas((prev) => ({ ...prev, [claveProd]: true }))
+                                }
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                          )}
+
+                          <p className="text-[11px] font-black text-gray-100 uppercase leading-snug mb-3 line-clamp-2 group-hover:text-green-400 transition-colors">
+                            {p.nombre}
+                          </p>
                         </div>
-                        <div className="w-7 h-7 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 border border-green-500/20 group-hover:bg-green-500 group-hover:text-black transition-all shrink-0">
-                          <ChevronRight size={14} strokeWidth={3.5} />
+
+                        <div className="flex items-end justify-between gap-2">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase">
+                              Precio
+                            </span>
+                            <span className="text-green-400 font-black text-base tracking-tight">
+                              ${(Number(p.precio) || 0).toLocaleString('es-AR')}
+                            </span>
+                          </div>
+                          <div className="w-7 h-7 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 border border-green-500/20 group-hover:bg-green-500 group-hover:text-black transition-all shrink-0">
+                            <ChevronRight size={14} strokeWidth={3.5} />
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
