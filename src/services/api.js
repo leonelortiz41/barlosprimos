@@ -5,7 +5,7 @@ const API_URL = /^https?:\/\//i.test(rawUrl) ? rawUrl : 'http://localhost:3000';
 
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 6000,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },

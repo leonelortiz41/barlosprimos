@@ -30,6 +30,13 @@ const extraerArray = (respuesta, clavesPosibles = ['data', 'pedidos', 'repartido
   return [];
 };
 
+const parsearImporte = (valor) => {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0;
+  const limpio = String(valor ?? '0').replace(/[^\d.-]/g, '');
+  const num = Number.parseFloat(limpio);
+  return Number.isFinite(num) ? num : 0;
+};
+
 const leerConfirmadosGuardados = () => {
   try {
     const raw = localStorage.getItem(CONFIRMADOS_KEY);
@@ -54,7 +61,7 @@ const extraerNumeroMesa = (pedido = {}) => {
     if (Number.isInteger(n) && n > 0) return n;
   }
   const fuente = `${pedido?.cliente ?? ''} ${pedido?.detalleTicket ?? ''}`;
-  const match = fuente.match(/\[?MESA\s*#?\s*(\d+)\]?/i);
+  const match = fuente.match(/\[?\s*MESA\s*#?\s*(\d+)\s*\]?/i);
   if (match?.[1]) {
     const n = Number.parseInt(match[1], 10);
     if (Number.isInteger(n) && n > 0) return n;
@@ -70,7 +77,8 @@ const esPedidoMesa = (pedido = {}) => {
 
 const extraerNombreLimpio = (rawCliente = '') => {
   const sinPrefijo = String(rawCliente)
-    .replace(/^\[(?:WEB|MESA\s*#?\s*\d+)\]\s*/i, '')
+    .replace(/^\[(?:WEB|MESA(?:\s*#?\s*\d+)?)\]\s*/i, '')
+    .replace(/^[·|\s]+/, '')
     .trim();
   const soloNombre = sinPrefijo.split(/[·|]/)[0].trim();
   return soloNombre || 'Cliente';
@@ -84,7 +92,8 @@ const extraerDireccionPedido = (pedido = {}) => {
   }
 
   const partesCliente = String(pedido?.cliente || '')
-    .replace(/^\[(?:WEB|MESA\s*#?\s*\d+)\]\s*/i, '')
+    .replace(/^\[(?:WEB|MESA(?:\s*#?\s*\d+)?)\]\s*/i, '')
+    .replace(/^[·|\s]+/, '')
     .split(/[·|]/)
     .map((p) => p.trim())
     .filter(Boolean);
@@ -115,12 +124,6 @@ const extraerDireccionPedido = (pedido = {}) => {
   return '';
 };
 
-const esPedidoWeb = (pedido) => {
-  if (esPedidoMesa(pedido)) return true;
-  const texto = `${pedido?.pj ?? ''} ${pedido?.detalleTicket ?? ''} ${pedido?.cliente ?? ''}`.toUpperCase();
-  return texto.includes('[WEB]') || texto.includes('WEB') || texto.includes('TEL:');
-};
-
 const extraerTelefonoPedido = (pedido) => {
   if (esPedidoMesa(pedido)) return '';
   const directo = pedido?.telefono || pedido?.celular || pedido?.whatsapp;
@@ -131,6 +134,15 @@ const extraerTelefonoPedido = (pedido) => {
   const matchTel = fuente.match(/(?:TEL[:\s]*|WHATSAPP[:\s]*|\+?54\s*9?\s*)?(\d{10,13})/i);
   if (!matchTel) return '';
   return matchTel[1].replace(/\D/g, '');
+};
+
+const esPedidoWeb = (pedido) => {
+  if (esPedidoMesa(pedido)) return true;
+  const origen = String(pedido?.origen || '').toUpperCase();
+  if (origen === 'WEB' || origen === 'MESA_QR') return true;
+  const clienteStr = String(pedido?.cliente ?? '').toUpperCase();
+  if (clienteStr.includes('[WEB]')) return true;
+  return Boolean(extraerTelefonoPedido(pedido));
 };
 
 const formatearTelefonoLegible = (pedido = {}) => {
@@ -187,7 +199,7 @@ const construirUrlWhatsApp = (pedido) => {
   }
 
   const clienteLimpio = extraerNombreLimpio(pedido?.cliente || 'cliente');
-  const importe = Number(pedido?.importe || 0).toLocaleString('es-AR');
+  const importe = parsearImporte(pedido?.importe).toLocaleString('es-AR');
   const resumen = String(pedido?.detalleTicket || '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -321,6 +333,7 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
   const ejecutarConfirmacionPedido = async (pedido, { mostrarAlerta = true } = {}) => {
     const idStr = String(pedido.id);
     const clienteFormateado = construirClienteConfirmado(pedido);
+    const direccionExtraida = extraerDireccionPedido(pedido);
     setConfirmandoId(idStr);
 
     try {
@@ -339,18 +352,30 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
         }
       }
 
+      const importeNumerico = parsearImporte(pedido.importe);
+
       await api.editPedido(pedido.id, {
         cantidad: pedido.cantidad ?? itemsArray.length,
         cliente: clienteFormateado,
+        direccion: pedido.direccion || direccionExtraida || '',
         detalle: pedido.detalle ?? '',
         detalleTicket: pedido.detalleTicket ?? '',
-        importe: pedido.importe ?? 0,
-        pedido: itemsArray
+        importe: importeNumerico,
+        pedido: itemsArray,
+        statu: pedido.statu ?? '0',
+        pagado: pedido.pagado ?? 0,
+        pj: pedido.pj ?? 0
       });
 
       setPedidos((prev) =>
         prev.map((item) =>
-          String(item.id) === idStr ? { ...item, cliente: clienteFormateado } : item
+          String(item.id) === idStr
+            ? {
+                ...item,
+                cliente: clienteFormateado,
+                direccion: item.direccion || direccionExtraida || ''
+              }
+            : item
         )
       );
 
@@ -448,14 +473,28 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/30">
-                  {pedidosFiltrados.map((p) => (
-                    <FilaPedido
-                      key={p.id}
-                      pedido={p}
-                      refreshData={handleRefreshFila}
-                      repartidores={repartidores}
-                    />
-                  ))}
+                  {loading && pedidosFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-xs font-bold uppercase text-gray-500">
+                        Cargando pedidos...
+                      </td>
+                    </tr>
+                  ) : pedidosFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-xs font-bold uppercase text-gray-500">
+                        No hay pedidos para mostrar.
+                      </td>
+                    </tr>
+                  ) : (
+                    pedidosFiltrados.map((p) => (
+                      <FilaPedido
+                        key={p.id}
+                        pedido={p}
+                        refreshData={handleRefreshFila}
+                        repartidores={repartidores}
+                      />
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -553,7 +592,7 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
                   const esMesa = esPedidoMesa(ped);
                   const numMesa = extraerNumeroMesa(ped);
                   const waUrl = construirUrlWhatsApp(ped);
-                  const nombreLimpio = extraerNombreLimpio(ped?.cliente || 'CLIENTE');
+                  const nombreLimpio = extraerNombreLimpio(ped?.cliente || '');
                   const direccionPedido = extraerDireccionPedido(ped);
                   const telefonoLegible = formatearTelefonoLegible(ped);
 
@@ -565,7 +604,7 @@ const Cuaderno = ({ onPendientesChange = () => {} }) => {
                           {nombreLimpio}
                         </div>
                         <span className="text-xs font-black text-orange-400 shrink-0">
-                          ${Number(ped.importe || 0).toLocaleString('es-AR')}
+                          ${parsearImporte(ped.importe).toLocaleString('es-AR')}
                         </span>
                       </div>
 

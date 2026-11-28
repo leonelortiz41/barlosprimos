@@ -8,7 +8,8 @@ import Cuaderno from './pages/Cuaderno';
 import Configuracion from './pages/Configuracion';
 import ConfigAppWeb from './pages/ConfigAppWeb';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const rawApiUrl = String(import.meta.env.VITE_API_URL || 'http://localhost:3000').trim();
+const API_URL = rawApiUrl.replace(/\/+$/, '');
 const CONFIRMADOS_KEY = 'bar_los_primos_pedidos_confirmados_v1';
 
 const extraerPedidosLista = (resPedidos) => {
@@ -44,8 +45,9 @@ const esPedidoWebPendiente = (pedido, setConfirmados) => {
   if (String(pedido?.statu || '').startsWith('ENTREGADO_')) return false;
   if (setConfirmados.has(String(pedido.id))) return false;
   if (esPedidoMesaPendiente(pedido)) return true;
-  const marca = `${pedido?.pj ?? ''} ${pedido?.detalleTicket ?? ''} ${pedido?.cliente ?? ''}`.toUpperCase();
-  return marca.includes('[WEB]') || marca.includes('WEB') || marca.includes('TEL:');
+  if (String(pedido?.origen || '').toUpperCase() === 'WEB') return true;
+  const clienteStr = String(pedido?.cliente ?? '').toUpperCase();
+  return clienteStr.includes('[WEB]');
 };
 
 function AppContent() {

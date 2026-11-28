@@ -76,6 +76,10 @@ const Configuracion = () => {
     cargarDatos();
   }, [cargarDatos]);
 
+  const sinProductosAun = Object.values(datos.productos).every(
+    (lista) => !Array.isArray(lista) || lista.length === 0
+  );
+
   return (
     <div className="max-w-5xl mx-auto pb-20 px-4">
       {/* NAVEGACIÓN */}
@@ -104,12 +108,12 @@ const Configuracion = () => {
       </div>
 
       {/* RENDERIZADO CONDICIONAL */}
-      <div className="animate-in fade-in zoom-in-95 duration-300">
+      <div className="transition-opacity duration-200">
         {activeTab === 'menu' && (
           <>
-            {cargando && (
+            {cargando && sinProductosAun && (
               <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3 text-center">
-                Actualizando carta...
+                Cargando carta...
               </p>
             )}
             <SeccionCarta

@@ -3,7 +3,15 @@ import { api } from '../../services/api.js';
 import ItemMenu from '../Admin/ItemMenu.jsx';
 import { PlusCircle, UploadCloud, X, Image as ImageIcon } from 'lucide-react';
 
-const comprimirImagenEnNavegador = (archivo, maxAncho = 800, calidad = 0.78) =>
+const AGREGADOS_RAPIDOS = [
+  'JAMÓN',
+  'QUESO',
+  'HUEVO',
+  'PAPAS',
+  'CHEDDAR'
+];
+
+export const comprimirImagenEnNavegador = (archivo, maxAncho = 800, calidad = 0.78) =>
   new Promise((resolve, reject) => {
     if (!archivo || !archivo.type.startsWith('image/')) {
       reject(new Error('Seleccioná un archivo de imagen válido.'));
@@ -62,7 +70,8 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
   const [nuevo, setNuevo] = useState({
     nombre: '',
     precio: '',
-    categoria: categoriaInicial
+    categoria: categoriaInicial,
+    descripcion: ''
   });
   const [imagenComprimida, setImagenComprimida] = useState(null);
   const [procesandoImagen, setProcesandoImagen] = useState(false);
@@ -78,6 +87,25 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
     Number(nuevo.precio) >= 0 &&
     !guardando &&
     !procesandoImagen;
+
+  const alternarAgregadoRapido = (agregado) => {
+    setNuevo((prev) => {
+      const actuales = String(prev.descripcion || '')
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      const existe = actuales.includes(agregado);
+      const siguientes = existe
+        ? actuales.filter((item) => item !== agregado)
+        : [...actuales, agregado];
+
+      return {
+        ...prev,
+        descripcion: siguientes.join(', ')
+      };
+    });
+  };
 
   const procesarArchivo = async (archivo) => {
     if (!archivo) return;
@@ -118,17 +146,19 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
 
     setGuardando(true);
     try {
+      const descripcionLimpia = String(nuevo.descripcion || '').trim().toUpperCase();
       const payload = {
         ...nuevo,
         nombre: nuevo.nombre.trim().toUpperCase(),
-        precio: Number(nuevo.precio)
+        precio: Number(nuevo.precio),
+        descripcion: descripcionLimpia
       };
       if (imagenComprimida?.dataUrl) {
         payload.imagenBase64 = imagenComprimida.dataUrl;
       }
 
       await api.addProducto(nuevo.categoria, payload);
-      setNuevo((prev) => ({ ...prev, nombre: '', precio: '' }));
+      setNuevo((prev) => ({ ...prev, nombre: '', precio: '', descripcion: '' }));
       limpiarImagen();
       await refresh?.();
     } finally {
@@ -136,30 +166,37 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
     }
   };
 
+  const agregadosActivosSet = new Set(
+    String(nuevo.descripcion || '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+  );
+
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] text-white">
-      {/* FORMULARIO FIJO ARRIBA */}
-      <div className="mb-5 shrink-0">
+    <div className="flex flex-col text-white pb-6">
+      {/* FORMULARIO SUPERIOR COMPACTO */}
+      <div className="mb-5">
         <form
           onSubmit={agregar}
-          className="bg-gradient-to-b from-[#111318] to-[#0a0b0e] border border-white/10 p-4 sm:p-5 rounded-2xl flex flex-col gap-3.5 shadow-xl"
+          className="bg-gradient-to-b from-[#111318] to-[#0a0b0e] border border-white/10 p-3.5 sm:p-4 rounded-2xl flex flex-col gap-2.5 shadow-xl"
         >
-          <div className="flex flex-wrap gap-3.5 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1.5 ml-1">
+          <div className="flex flex-wrap gap-2.5 items-end">
+            <div className="flex-1 min-w-[190px]">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1 ml-1">
                 Producto
               </label>
               <input
                 type="text"
                 value={nuevo.nombre}
                 onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
-                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white placeholder:text-gray-600 uppercase outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3 py-2 text-xs font-bold text-white placeholder:text-gray-600 uppercase outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                 placeholder="EJ. MILANESA NAPOLITANA"
               />
             </div>
 
-            <div className="w-28 sm:w-32">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1.5 ml-1">
+            <div className="w-24 sm:w-28">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1 ml-1">
                 Precio
               </label>
               <input
@@ -167,19 +204,19 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
                 min="0"
                 value={nuevo.precio}
                 onChange={(e) => setNuevo({ ...nuevo, precio: e.target.value })}
-                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white placeholder:text-gray-600 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all tabular-nums"
+                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3 py-2 text-xs font-bold text-white placeholder:text-gray-600 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all tabular-nums"
                 placeholder="$ 0"
               />
             </div>
 
-            <div className="w-full sm:w-44">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1.5 ml-1">
+            <div className="w-full sm:w-40">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1 ml-1">
                 Categoría
               </label>
               <select
                 value={nuevo.categoria}
                 onChange={(e) => setNuevo({ ...nuevo, categoria: e.target.value })}
-                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white uppercase outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer"
+                className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3 py-2 text-xs font-bold text-white uppercase outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all cursor-pointer"
               >
                 {categoriasDisponibles.map((cat) => (
                   <option key={cat} value={cat} className="bg-[#111318] text-white">
@@ -192,11 +229,51 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
             <button
               type="submit"
               disabled={!puedeAgregar}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 disabled:border-white/5 text-black font-black text-xs uppercase tracking-wider border border-orange-300/30 shadow-md shadow-orange-600/20 disabled:shadow-none flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:scale-100 cursor-pointer disabled:cursor-not-allowed shrink-0"
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 disabled:border-white/5 text-black font-black text-xs uppercase tracking-wider border border-orange-300/30 shadow-md shadow-orange-600/20 disabled:shadow-none flex items-center justify-center gap-2 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:scale-100 cursor-pointer disabled:cursor-not-allowed shrink-0"
             >
-              <PlusCircle size={16} strokeWidth={2.5} />
+              <PlusCircle size={15} strokeWidth={2.5} />
               <span>{guardando ? 'Agregando...' : 'Agregar'}</span>
             </button>
+          </div>
+
+          {/* DESCRIPCIÓN Y AGREGADOS PARA ESPECIALES */}
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 ml-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                Descripción / Agregados del especial (opcional)
+              </label>
+              <span className="text-[10px] text-amber-300/85 font-semibold">
+                Base sándwiches: ají, mayonesa, mostaza, lechuga y tomate
+              </span>
+            </div>
+
+            <input
+              type="text"
+              value={nuevo.descripcion}
+              onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })}
+              className="input-dark w-full rounded-xl bg-black/70 border border-white/15 px-3 py-1.5 text-xs font-bold text-white placeholder:text-gray-600 uppercase outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
+              placeholder="EJ. JAMÓN, QUESO, HUEVO Y PANCETA"
+            />
+
+            <div className="flex flex-wrap gap-1.5">
+              {AGREGADOS_RAPIDOS.map((agregado) => {
+                const activo = agregadosActivosSet.has(agregado);
+                return (
+                  <button
+                    key={agregado}
+                    type="button"
+                    onClick={() => alternarAgregadoRapido(agregado)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors cursor-pointer ${
+                      activo
+                        ? 'bg-orange-500 text-black border-orange-300'
+                        : 'bg-white/[0.04] hover:bg-white/[0.09] text-gray-300 border-white/10'
+                    }`}
+                  >
+                    + {agregado}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* ZONA ARRASTRAR Y SOLTAR FOTO */}
@@ -234,15 +311,15 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
                   setArrastrando(false);
                 }}
                 onDrop={handleDrop}
-                className={`rounded-xl border border-dashed px-4 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                className={`rounded-xl border border-dashed px-3.5 py-2 flex items-center justify-between gap-3 cursor-pointer transition-all ${
                   arrastrando
                     ? 'border-orange-400 bg-orange-500/15'
                     : 'border-white/15 bg-black/40 hover:border-orange-500/50 hover:bg-black/60'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   <UploadCloud
-                    size={18}
+                    size={16}
                     className={arrastrando ? 'text-orange-400 shrink-0' : 'text-gray-400 shrink-0'}
                   />
                   <span className="text-[11px] font-bold text-gray-300 truncate">
@@ -256,12 +333,12 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
                 </span>
               </div>
             ) : (
-              <div className="rounded-xl border border-orange-500/30 bg-black/50 px-3 py-2 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="rounded-xl border border-orange-500/30 bg-black/50 px-3 py-1.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <img
                     src={imagenComprimida.dataUrl}
                     alt="Vista previa del producto"
-                    className="w-11 h-11 rounded-lg object-cover border border-white/15 shrink-0"
+                    className="w-10 h-10 rounded-lg object-cover border border-white/15 shrink-0"
                   />
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white truncate flex items-center gap-1.5">
@@ -280,13 +357,13 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
                   className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-colors shrink-0 cursor-pointer"
                   title="Quitar foto"
                 >
-                  <X size={15} />
+                  <X size={14} />
                 </button>
               </div>
             )}
 
             {errorImagen && (
-              <p className="text-[11px] font-bold text-red-400 mt-1.5 ml-1">
+              <p className="text-[11px] font-bold text-red-400 mt-1 ml-1">
                 {errorImagen}
               </p>
             )}
@@ -294,13 +371,13 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
         </form>
       </div>
 
-      {/* CONTENEDOR CON SCROLL */}
-      <div className="flex-1 overflow-y-auto pr-1.5 custom-scrollbar space-y-8">
+      {/* LISTADO DE CATEGORÍAS CON SCROLL NATURAL */}
+      <div className="space-y-6">
         {Object.entries(productos).map(([cat, list]) => {
           const items = Array.isArray(list) ? list : [];
           return (
-            <section key={cat} className="space-y-3">
-              <div className="sticky top-0 z-10 flex items-center justify-between bg-[#060606]/95 backdrop-blur-sm py-2 px-1 border-b border-white/10">
+            <section key={cat} className="space-y-2.5">
+              <div className="flex items-center justify-between bg-[#060606]/95 py-1.5 px-1 border-b border-white/10">
                 <h2 className="text-orange-400 font-black uppercase text-[11px] tracking-[0.2em] border-l-2 border-orange-500 pl-3">
                   {cat}
                 </h2>
@@ -309,7 +386,7 @@ const SeccionCarta = ({ productos = {}, refresh }) => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {items.map((p) => (
                   <ItemMenu
                     key={p.id}
